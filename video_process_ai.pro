@@ -5,11 +5,13 @@ QT += multimedia multimediawidgets
 
 HEADERS = \
     camera.h \
+    ffmpeg_rtmp.h \
     imagesettings.h \
     videosettings.h \
     metadatadialog.h
 
 SOURCES = \
+    ffmpeg_rtmp.cpp \
     main.cpp \
     camera.cpp \
     imagesettings.cpp \
@@ -28,6 +30,16 @@ android|ios {
         camera.ui \
         videosettings.ui
 }
+
+win32
+{
+  message("Win32 enabled")
+  DEFINES += WIN32_LEAN_AND_MEAN
+  RC_ICONS += $$PWD\images\app.ico
+  INCLUDEPATH += $$PWD\lib\ffmpeg
+  LIBS += -L$$PWD\lib\libav -llibavformat -llibavcodec -llibavutil -llibavfilter -llibswscale -lswresample
+}
+
 RESOURCES += camera.qrc
 
 qnx: target.path = /tmp/$${TARGET}/bin

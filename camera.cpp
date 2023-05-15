@@ -29,8 +29,17 @@ Camera::Camera()
 {
     ui->setupUi(this);
 
+    ui->pushStream->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
+    ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
+
     m_audioInput.reset(new QAudioInput);
     m_captureSession.setAudioInput(m_audioInput.get());
+
+    m_ffmpeg_rtmp = new ffmpeg_rtmp();
+    if(m_ffmpeg_rtmp)
+    {
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
+    }
 
     //Camera devices:
 
@@ -93,7 +102,7 @@ void Camera::setCamera(const QCameraDevice &cameraDevice)
                     bestFormat = fmt;
                 else if (bestFormat.maxFrameRate() == fmt.maxFrameRate() &&
                          bestFormat.resolution().width()*bestFormat.resolution().height() <
-                             fmt.resolution().width()*fmt.resolution().height())
+                         fmt.resolution().width()*fmt.resolution().height())
                     bestFormat = fmt;
             }
 
@@ -236,17 +245,17 @@ void Camera::updateCaptureMode()
 
 void Camera::updateCameraActive(bool active)
 {
-    if (active) {
-        ui->actionStartCamera->setEnabled(false);
-        ui->actionStopCamera->setEnabled(true);
-        ui->captureWidget->setEnabled(true);
-        ui->actionSettings->setEnabled(true);
-    } else {
-        ui->actionStartCamera->setEnabled(true);
-        ui->actionStopCamera->setEnabled(false);
-        ui->captureWidget->setEnabled(false);
-        ui->actionSettings->setEnabled(false);
-    }
+    //    if (active) {
+    //        ui->actionStartCamera->setEnabled(false);
+    //        ui->actionStopCamera->setEnabled(true);
+    //        ui->captureWidget->setEnabled(true);
+    //        ui->actionSettings->setEnabled(true);
+    //    } else {
+    //        ui->actionStartCamera->setEnabled(true);
+    //        ui->actionStopCamera->setEnabled(false);
+    //        ui->captureWidget->setEnabled(false);
+    //        ui->actionSettings->setEnabled(false);
+    //    }
 }
 
 void Camera::updateRecorderState(QMediaRecorder::RecorderState state)
@@ -355,6 +364,11 @@ void Camera::showMetaDataDialog()
         saveMetaData();
 }
 
+void Camera::setInfo(QString message)
+{
+    ui->textTerminal->append(message);
+}
+
 void Camera::saveMetaData()
 {
     QMediaMetaData data;
@@ -380,5 +394,20 @@ void Camera::saveMetaData()
         }
     }
     m_mediaRecorder->setMetaData(data);
+}
+
+
+void Camera::on_pushStream_clicked()
+{
+    if(ui->pushStream->text() == "Start")
+    {
+        m_ffmpeg_rtmp->start();
+        ui->pushStream->setText("Stop");
+    }
+    else
+    {
+        m_ffmpeg_rtmp->stop();
+        ui->pushStream->setText("Start");
+    }
 }
 

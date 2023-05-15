@@ -12,6 +12,8 @@
 
 #include <QMainWindow>
 
+#include "ffmpeg_rtmp.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class Camera; }
 class QActionGroup;
@@ -70,6 +72,9 @@ private slots:
     void updateCameras();
 
     void showMetaDataDialog();
+    void setInfo(QString);
+
+    void on_pushStream_clicked();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -78,6 +83,8 @@ protected:
 
 private:
     Ui::Camera *ui;
+
+    ffmpeg_rtmp* m_ffmpeg_rtmp{};
 
     QActionGroup *videoDevicesGroup  = nullptr;
 
