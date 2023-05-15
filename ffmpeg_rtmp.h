@@ -18,6 +18,7 @@
 //Windows
 extern "C"
 {
+#include <libavcodec/avcodec.h>
 #include "libavformat/avformat.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/time.h"
@@ -28,6 +29,7 @@ extern "C"
 extern "C"
 {
 #endif
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/time.h>

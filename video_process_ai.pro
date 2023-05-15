@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = video_process_ai
 
-QT += multimedia multimediawidgets
+QT += multimedia multimediawidgets widgets
 
 HEADERS = \
     camera.h \
@@ -31,13 +31,22 @@ android|ios {
         videosettings.ui
 }
 
-win32
-{
+win32 {
   message("Win32 enabled")
   DEFINES += WIN32_LEAN_AND_MEAN
   RC_ICONS += $$PWD\images\app.ico
   INCLUDEPATH += $$PWD\lib\ffmpeg
   LIBS += -L$$PWD\lib\libav -llibavformat -llibavcodec -llibavutil -llibavfilter -llibswscale -lswresample
+}
+
+unix:!macx {
+    message("linux enabled")
+}
+
+unix:macx {
+    message("macx enabled")
+    INCLUDEPATH += /opt/homebrew/Cellar/ffmpeg/6.0/include
+    LIBS += -L/opt/homebrew/Cellar/ffmpeg/6.0/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
 }
 
 RESOURCES += camera.qrc
@@ -46,7 +55,6 @@ qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
-QT += widgets
 include(./shared/shared.pri)
 
 ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
