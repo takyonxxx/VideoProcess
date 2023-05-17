@@ -30,6 +30,7 @@ Camera::Camera()
     ui->setupUi(this);
 
     ui->pushStream->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
+    ui->pushExit->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
     ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
 
     m_audioInput.reset(new QAudioInput);
@@ -39,6 +40,7 @@ Camera::Camera()
     if(m_ffmpeg_rtmp)
     {
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Camera::setConnectionStatus);
     }
 
     //Camera devices:
@@ -50,8 +52,6 @@ Camera::Camera()
 
     connect(videoDevicesGroup, &QActionGroup::triggered, this, &Camera::updateCameraDevice);
     connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
-
-    connect(ui->metaDataButton, &QPushButton::clicked, this, &Camera::showMetaDataDialog);
 
     setCamera(QMediaDevices::defaultVideoInput());
 }
@@ -75,8 +75,6 @@ void Camera::setCamera(const QCameraDevice &cameraDevice)
 
     connect(m_mediaRecorder.data(), &QMediaRecorder::durationChanged, this, &Camera::updateRecordTime);
     connect(m_mediaRecorder.data(), &QMediaRecorder::errorChanged, this, &Camera::displayRecorderError);
-
-    connect(ui->exposureCompensation, &QAbstractSlider::valueChanged, this, &Camera::setExposureCompensation);
 
     m_captureSession.setVideoOutput(ui->viewfinder);
 
@@ -261,23 +259,11 @@ void Camera::updateCameraActive(bool active)
 void Camera::updateRecorderState(QMediaRecorder::RecorderState state)
 {
     switch (state) {
-    case QMediaRecorder::StoppedState:
-        ui->recordButton->setEnabled(true);
-        ui->pauseButton->setEnabled(true);
-        ui->stopButton->setEnabled(false);
-        ui->metaDataButton->setEnabled(true);
+    case QMediaRecorder::StoppedState:       
         break;
-    case QMediaRecorder::PausedState:
-        ui->recordButton->setEnabled(true);
-        ui->pauseButton->setEnabled(false);
-        ui->stopButton->setEnabled(true);
-        ui->metaDataButton->setEnabled(false);
+    case QMediaRecorder::PausedState:       
         break;
-    case QMediaRecorder::RecordingState:
-        ui->recordButton->setEnabled(false);
-        ui->pauseButton->setEnabled(true);
-        ui->stopButton->setEnabled(true);
-        ui->metaDataButton->setEnabled(false);
+    case QMediaRecorder::RecordingState:       
         break;
     }
 }
@@ -316,7 +302,7 @@ void Camera::displayCapturedImage()
 
 void Camera::readyForCapture(bool ready)
 {
-    ui->takeImageButton->setEnabled(ready);
+
 }
 
 void Camera::imageSaved(int id, const QString &fileName)
@@ -369,6 +355,20 @@ void Camera::setInfo(QString message)
     ui->textTerminal->append(message);
 }
 
+void Camera::setConnectionStatus(bool status)
+{
+    if(status)
+    {
+        ui->pushStream->setText("Stop");
+        setInfo("Rtmp stream started.");
+    }
+    else
+    {
+        ui->pushStream->setText("Start");
+        setInfo("Rtmp stream stopped.");
+    }
+}
+
 void Camera::saveMetaData()
 {
     QMediaMetaData data;
@@ -396,18 +396,20 @@ void Camera::saveMetaData()
     m_mediaRecorder->setMetaData(data);
 }
 
-
 void Camera::on_pushStream_clicked()
 {
     if(ui->pushStream->text() == "Start")
     {
         m_ffmpeg_rtmp->start();
-        ui->pushStream->setText("Stop");
     }
     else
     {
         m_ffmpeg_rtmp->stop();
-        ui->pushStream->setText("Start");
     }
+}
+
+void Camera::on_pushExit_clicked()
+{
+    QApplication::quit();
 }
 

@@ -73,8 +73,11 @@ private slots:
 
     void showMetaDataDialog();
     void setInfo(QString);
+    void setConnectionStatus(bool);
 
     void on_pushStream_clicked();
+
+    void on_pushExit_clicked();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
