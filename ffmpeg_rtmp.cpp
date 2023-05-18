@@ -120,24 +120,8 @@ void ffmpeg_rtmp::run()
 
     sendConnectionStatus(true);
 
-
     // Read packets from the input stream and write to the output file
     AVPacket* packet = av_packet_alloc();
-    SwsContext *swsContext = sws_alloc_context();
-    int width = 1280;
-    int height = 720;
-
-    AVFrame* frameRGB;    // Output frame in RGB format
-
-    frameRGB = av_frame_alloc();
-    frameRGB->format = AV_PIX_FMT_BGR24;
-    frameRGB->width = width;
-    frameRGB->height = height;
-    av_frame_get_buffer(frameRGB, 0);
-
-    swsContext = sws_getContext(
-         width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, width, height,
-         AVPixelFormat::AV_PIX_FMT_RGB24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
     while (av_read_frame(inputContext, packet) == 0) {
         if(m_stop)
@@ -160,25 +144,8 @@ void ffmpeg_rtmp::run()
                     //std::cout << "avcodec_receive_frame: " << ret << std::endl;
                     break;
                 }
-
-                const char* pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format));
-                qDebug() << pixelFormatName;
-
-                int width = frame->width;
-                int height = frame->height;
-
-                if (frame->format != AV_PIX_FMT_RGB24) {
-
-                    // Convert the frame to RGB24 format
-                    sws_scale(swsContext, frame->data, frame->linesize, 0, height,
-                              frameRGB->data, frameRGB->linesize);
-                } else {
-                    // Use the existing RGB frame
-                    frameRGB = frame;
-                }
-                emit sendFrame(*frameRGB);
-                //av_frame_free(&frameRGB);
-                sws_freeContext(swsContext);
+                emit sendFrame(*frame);
+//                av_frame_free(&frame);
             }
         }
 

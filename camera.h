@@ -11,7 +11,10 @@
 #include <QAudioInput>
 #include <QMediaPlayer>
 #include <QMainWindow>
-
+#include <QMediaFormat>
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QTimer>
 #include "ffmpeg_rtmp.h"
 
 QT_BEGIN_NAMESPACE
@@ -88,16 +91,17 @@ protected:
 private:
     Ui::Camera *ui;
 
-    ffmpeg_rtmp* m_ffmpeg_rtmp{};
+    ffmpeg_rtmp* m_ffmpeg_rtmp = nullptr;
     QActionGroup *videoDevicesGroup  = nullptr;
-
-    QMediaPlayer *player;
     QMediaDevices m_devices;
     QMediaCaptureSession m_captureSession;    
     QScopedPointer<QCamera> m_camera;
     QScopedPointer<QAudioInput> m_audioInput;
     QImageCapture *m_imageCapture;
     QScopedPointer<QMediaRecorder> m_mediaRecorder;
+
+    QGraphicsScene *scene;
+    QGraphicsView *view;
 
     bool m_isCapturingImage = false;
     bool m_applicationExiting = false;

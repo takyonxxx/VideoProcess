@@ -1,40 +1,43 @@
-#ifndef TEMPLATE_H
-#define TEMPLATE_H
-//        while (ret >= 0) {
-//            ret = avcodec_receive_frame(codecContext, frame);
-//            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-//                break;
-//            } else if (ret < 0) {
-//                qWarning() << "Error during video decoding.";
-//                break;
-//            }
+//#ifndef TEMPLATE_H
+//#define TEMPLATE_H
+//SwsContext *swsContext = sws_alloc_context();
+//int width = 1280;
+//int height = 720;
 
-//            if (frame->format != AV_PIX_FMT_RGB24) {
-//                // Convert the video frame to RGB format
-//                sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
-//                          frameRGB->data, frameRGB->linesize);
-//            } else {
-//                // Use the existing RGB frame
-//                frameRGB = frame;
-//            }
+//AVFrame* frameRGB;    // Output frame in RGB format
 
-//            // Create a QImage from the RGB frame
-//            QImage image(frameRGB->data[0], frameRGB->width, frameRGB->height, QImage::Format_RGB888);
+//frameRGB = av_frame_alloc();
+//frameRGB->format = AV_PIX_FMT_BGR24;
+//frameRGB->width = width;
+//frameRGB->height = height;
+//av_frame_get_buffer(frameRGB, 0);
 
-//            // Set the image as the media source for QMediaPlayer
-//            QVideoFrame videoFrame(image);
-//            mediaPlayer->setVideoOutput(videoFrame.handle());
+//swsContext = sws_getContext(
+//            width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, width, height,
+//            AVPixelFormat::AV_PIX_FMT_RGB24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
-//            // Play the media
-//            mediaPlayer->play();
 
-//            // Delay the playback based on the frame rate (fps)
-//            int delay = 1000 / fps;
-//            QThread::msleep(delay);
+//    auto v_format = QVideoFrameFormat(image.size(), QVideoFrameFormat::pixelFormatFromImageFormat(image.format()));
+//    QVideoFrame v_frame(v_format);
+//    v_frame.map(QVideoFrame::WriteOnly);
 
-//            av_frame_unref(frame);
+//    // Copy pixel data from QImage to QVideoFrame
+//    const uchar* srcBits = image.constBits();
+//    uchar* destBits = v_frame.bits(0);
+//    int bytesPerLine = v_frame.bytesPerLine(0);
+//    for (int y = 0; y < image.height(); ++y) {
+//        memcpy(destBits, srcBits, bytesPerLine);
+//        srcBits += image.bytesPerLine();
+//        destBits += bytesPerLine;
+//    }
 
-//            qDebug() << frame->format << frame->width << frame->height;
-//        }
-
-#endif // TEMPLATE_H
+//        QString streamUrl  = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8";
+//        player = new QMediaPlayer;
+//        player->setVideoOutput(ui->viewfinder);
+//        player->setSource(QUrl(streamUrl));
+//        connect(player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString& errorString)
+//        {
+//            qDebug() << "Error:" << errorString;
+//        });
+//        player->play();
+//#endif // TEMPLATE_H

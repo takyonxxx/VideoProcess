@@ -22,7 +22,7 @@
 
 #include <QtWidgets>
 #include <QMediaDevices>
-#include <QMediaFormat>
+
 
 Camera::Camera()
     : ui(new Ui::Camera)
@@ -54,17 +54,12 @@ Camera::Camera()
     connect(videoDevicesGroup, &QActionGroup::triggered, this, &Camera::updateCameraDevice);
     connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
 
+    scene = new QGraphicsScene;
+    QBrush brush(Qt::black); // Set the desired background color
+    scene->setBackgroundBrush(brush);
+    view = ui->graphicsView;
+    view->setScene(scene);
     setCamera(QMediaDevices::defaultVideoInput());
-
-    //        QString streamUrl  = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8";
-    //        player = new QMediaPlayer;
-    //        player->setVideoOutput(ui->viewfinder);
-    //        player->setSource(QUrl(streamUrl));
-    //        connect(player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString& errorString)
-    //        {
-    //            qDebug() << "Error:" << errorString;
-    //        });
-    //        player->play();
 }
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
@@ -422,25 +417,14 @@ void Camera::setConnectionStatus(bool status)
 }
 
 void Camera::setFrame(AVFrame frame)
-{/*
-
-
+{
     // Create a QImage from the RGB frame
-    QImage image(frameRGB->data[0], frameRGB->width, frameRGB->height, QImage::Format_RGB888);
+    QImage image(frame.data[0], frame.width, frame.height, QImage::Format_RGB888);
 
-    // Set the image as the media source for QMediaPlayer
-    QVideoFrame videoFrame(image);
-    mediaPlayer->setVideoOutput(videoFrame.handle());
-
-    // Play the media
-    mediaPlayer->play();
-
-    // Delay the playback based on the frame rate (fps)
-    int delay = 1000 / fps;
-    QThread::msleep(delay);
-
-    av_frame_unref(frame);*/
-    qDebug() << frame.width << frame.height;
+    scene->clear();
+    QGraphicsPixmapItem *pixmapItem = scene->addPixmap(QPixmap::fromImage(image));
+    view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
+    view->update();
 }
 
 void Camera::on_pushExit_clicked()
