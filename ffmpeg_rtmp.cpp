@@ -15,8 +15,8 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     : QThread{parent}
 {
     // Enable FFmpeg logging
-//    av_log_set_level(AV_LOG_DEBUG);
-//    av_log_set_callback(ffmpegLogCallback);
+    //    av_log_set_level(AV_LOG_DEBUG);
+    //    av_log_set_callback(ffmpegLogCallback);
 
     in_filename  = "rtmp://192.168.1.7:8889/live/app";
     out_filename = "/Users/turkaybiliyor/Desktop/output.mp4";
@@ -54,8 +54,14 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 
     // Iterate through input streams and copy all streams to output
     for (unsigned int i = 0; i < inputContext->nb_streams; ++i) {
-        AVStream* inputStream = inputContext->streams[i];
-        AVStream* outputStream = avformat_new_stream(outputContext, nullptr);
+        inputStream = inputContext->streams[i];
+        outputStream = avformat_new_stream(outputContext, nullptr);
+        if (inputContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            video_idx = i;
+            vid_stream = inputContext->streams[i];
+            qDebug() << "video_idx : " << video_idx;
+        }
         if (!outputStream) {
             // Error handling
             return false;
@@ -74,9 +80,31 @@ int ffmpeg_rtmp::prepare_ffmpeg()
         // Error handling
         return false;
     }
+
+    auto codec = avcodec_find_decoder(vid_stream->codecpar->codec_id);
+    if (!codec) {
+        fprintf(stderr, "codec not found\n");
+        exit(1);
+    }
+    ctx_codec = avcodec_alloc_context3(codec);
+
+    if(avcodec_parameters_to_context(ctx_codec, vid_stream->codecpar)<0)
+        std::cout << 512;
+
+    if (avcodec_open2(ctx_codec, codec, nullptr)<0) {
+        std::cout << 5;
+        return -1;
+    }
+
+    frame = av_frame_alloc();
+    if (!frame) {
+        qWarning() << "Failed to allocate video frame.";
+        avcodec_free_context(&ctx_codec);
+        return false;
+    }
+
     return true;
 }
-
 
 void ffmpeg_rtmp::run()
 {
@@ -92,27 +120,79 @@ void ffmpeg_rtmp::run()
 
     sendConnectionStatus(true);
 
+
     // Read packets from the input stream and write to the output file
-    AVPacket packet;
-    while (av_read_frame(inputContext, &packet) == 0) {
+    AVPacket* packet = av_packet_alloc();
+    SwsContext *swsContext = sws_alloc_context();
+    int width = 1280;
+    int height = 720;
+
+    AVFrame* frameRGB;    // Output frame in RGB format
+
+    frameRGB = av_frame_alloc();
+    frameRGB->format = AV_PIX_FMT_BGR24;
+    frameRGB->width = width;
+    frameRGB->height = height;
+    av_frame_get_buffer(frameRGB, 0);
+
+    swsContext = sws_getContext(
+         width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, width, height,
+         AVPixelFormat::AV_PIX_FMT_RGB24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+
+    while (av_read_frame(inputContext, packet) == 0) {
         if(m_stop)
-        {            
+        {
             sendConnectionStatus(false);
             break;
         }
-        if (packet.stream_index >= 0 && packet.stream_index < inputContext->nb_streams) {
-            AVStream* inputStream = inputContext->streams[packet.stream_index];
-            AVStream* outputStream = outputContext->streams[packet.stream_index];
 
-            // Rescale packet timestamps
-            packet.pts = av_rescale_q(packet.pts, inputStream->time_base, outputStream->time_base);
-            packet.dts = av_rescale_q(packet.dts, inputStream->time_base, outputStream->time_base);
-            packet.duration = av_rescale_q(packet.duration, inputStream->time_base, outputStream->time_base);
-            packet.pos = -1;
-            av_interleaved_write_frame(outputContext, &packet);
+        // for preview get only video
+        if (packet->stream_index == video_idx)
+        {
+            int ret = avcodec_send_packet(ctx_codec, packet);
+            if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                std::cout << "avcodec_send_packet: " << ret << std::endl;
+                break;
+            }
+            while (ret  >= 0) {
+                ret = avcodec_receive_frame(ctx_codec, frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    //std::cout << "avcodec_receive_frame: " << ret << std::endl;
+                    break;
+                }
+
+                const char* pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format));
+                qDebug() << pixelFormatName;
+
+                int width = frame->width;
+                int height = frame->height;
+
+                if (frame->format != AV_PIX_FMT_RGB24) {
+
+                    // Convert the frame to RGB24 format
+                    sws_scale(swsContext, frame->data, frame->linesize, 0, height,
+                              frameRGB->data, frameRGB->linesize);
+                } else {
+                    // Use the existing RGB frame
+                    frameRGB = frame;
+                }
+                emit sendFrame(*frameRGB);
+                //av_frame_free(&frameRGB);
+                sws_freeContext(swsContext);
+            }
         }
 
-        av_packet_unref(&packet);
+        if (packet->stream_index >= 0 && packet->stream_index < inputContext->nb_streams)
+        {
+            // Rescale packet timestamps
+            packet->pts = av_rescale_q(packet->pts, inputStream->time_base, outputStream->time_base);
+            packet->dts = av_rescale_q(packet->dts, inputStream->time_base, outputStream->time_base);
+            packet->duration = av_rescale_q(packet->duration, inputStream->time_base, outputStream->time_base);
+            packet->pos = -1;
+            av_interleaved_write_frame(outputContext, packet);
+        }
+
+        av_packet_unref(packet);        
     }
 
     // Write the output file trailer

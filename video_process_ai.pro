@@ -7,6 +7,7 @@ HEADERS = \
     camera.h \
     ffmpeg_rtmp.h \
     imagesettings.h \
+    template.h \
     videosettings.h \
     metadatadialog.h
 

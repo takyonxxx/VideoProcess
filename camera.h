@@ -9,7 +9,7 @@
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QAudioInput>
-
+#include <QMediaPlayer>
 #include <QMainWindow>
 
 #include "ffmpeg_rtmp.h"
@@ -72,11 +72,12 @@ private slots:
     void updateCameras();
 
     void showMetaDataDialog();
+
     void setInfo(QString);
     void setConnectionStatus(bool);
+    void setFrame(AVFrame);
 
     void on_pushStream_clicked();
-
     void on_pushExit_clicked();
 
 protected:
@@ -88,11 +89,11 @@ private:
     Ui::Camera *ui;
 
     ffmpeg_rtmp* m_ffmpeg_rtmp{};
-
     QActionGroup *videoDevicesGroup  = nullptr;
 
+    QMediaPlayer *player;
     QMediaDevices m_devices;
-    QMediaCaptureSession m_captureSession;
+    QMediaCaptureSession m_captureSession;    
     QScopedPointer<QCamera> m_camera;
     QScopedPointer<QAudioInput> m_audioInput;
     QImageCapture *m_imageCapture;

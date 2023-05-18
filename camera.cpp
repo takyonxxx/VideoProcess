@@ -41,6 +41,7 @@ Camera::Camera()
     {
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Camera::setConnectionStatus);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendFrame,this, &Camera::setFrame);
     }
 
     //Camera devices:
@@ -54,6 +55,16 @@ Camera::Camera()
     connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
 
     setCamera(QMediaDevices::defaultVideoInput());
+
+    //        QString streamUrl  = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8";
+    //        player = new QMediaPlayer;
+    //        player->setVideoOutput(ui->viewfinder);
+    //        player->setSource(QUrl(streamUrl));
+    //        connect(player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString& errorString)
+    //        {
+    //            qDebug() << "Error:" << errorString;
+    //        });
+    //        player->play();
 }
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
@@ -259,11 +270,11 @@ void Camera::updateCameraActive(bool active)
 void Camera::updateRecorderState(QMediaRecorder::RecorderState state)
 {
     switch (state) {
-    case QMediaRecorder::StoppedState:       
+    case QMediaRecorder::StoppedState:
         break;
-    case QMediaRecorder::PausedState:       
+    case QMediaRecorder::PausedState:
         break;
-    case QMediaRecorder::RecordingState:       
+    case QMediaRecorder::RecordingState:
         break;
     }
 }
@@ -350,25 +361,6 @@ void Camera::showMetaDataDialog()
         saveMetaData();
 }
 
-void Camera::setInfo(QString message)
-{
-    ui->textTerminal->append(message);
-}
-
-void Camera::setConnectionStatus(bool status)
-{
-    if(status)
-    {
-        ui->pushStream->setText("Stop");
-        setInfo("Rtmp stream started.");
-    }
-    else
-    {
-        ui->pushStream->setText("Start");
-        setInfo("Rtmp stream stopped.");
-    }
-}
-
 void Camera::saveMetaData()
 {
     QMediaMetaData data;
@@ -401,11 +393,54 @@ void Camera::on_pushStream_clicked()
     if(ui->pushStream->text() == "Start")
     {
         m_ffmpeg_rtmp->start();
+        ui->pushStream->setText("Stop");
     }
     else
     {
         m_ffmpeg_rtmp->stop();
+        ui->pushStream->setText("Start");
     }
+}
+
+void Camera::setInfo(QString message)
+{
+    ui->textTerminal->append(message);
+}
+
+void Camera::setConnectionStatus(bool status)
+{
+    if(status)
+    {
+        ui->pushStream->setText("Stop");
+        setInfo("Rtmp stream started.");
+    }
+    else
+    {
+        ui->pushStream->setText("Start");
+        setInfo("Rtmp stream stopped.");
+    }
+}
+
+void Camera::setFrame(AVFrame frame)
+{/*
+
+
+    // Create a QImage from the RGB frame
+    QImage image(frameRGB->data[0], frameRGB->width, frameRGB->height, QImage::Format_RGB888);
+
+    // Set the image as the media source for QMediaPlayer
+    QVideoFrame videoFrame(image);
+    mediaPlayer->setVideoOutput(videoFrame.handle());
+
+    // Play the media
+    mediaPlayer->play();
+
+    // Delay the playback based on the frame rate (fps)
+    int delay = 1000 / fps;
+    QThread::msleep(delay);
+
+    av_frame_unref(frame);*/
+    qDebug() << frame.width << frame.height;
 }
 
 void Camera::on_pushExit_clicked()

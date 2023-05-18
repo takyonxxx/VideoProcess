@@ -47,6 +47,19 @@ extern "C"
 #endif
 #endif
 
+class AVFrameWrapper : public QObject
+{
+    Q_OBJECT
+
+public:
+    AVFrameWrapper(AVFrame frame) : QObject(), framePtr(frame) {}
+
+    AVFrame getFrame() const { return framePtr; }
+
+private:
+    AVFrame framePtr;
+};
+
 
 class ffmpeg_rtmp : public QThread
 {
@@ -62,6 +75,13 @@ private:
     //Input AVFormatContext and Output AVFormatContext
     AVFormatContext* inputContext{nullptr};
     AVFormatContext* outputContext{nullptr};
+    AVCodecContext *ctx_codec{nullptr};
+    AVFrame *frame{nullptr};
+    AVFrame *frameRGB{nullptr};
+    AVStream *inputStream{nullptr};
+    AVStream *outputStream{nullptr};
+    AVStream *vid_stream{nullptr};
+    int video_idx;
 
     const char *in_filename, *out_filename;
 protected:
@@ -70,6 +90,7 @@ protected:
 signals:
     void sendInfo(QString);
     void sendConnectionStatus(bool);
+    void sendFrame(AVFrame);
 
 };
 
