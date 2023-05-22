@@ -18,11 +18,10 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     //    av_log_set_level(AV_LOG_DEBUG);
     //    av_log_set_callback(ffmpegLogCallback);
 
-    QString out_file = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
-    QByteArray inUtf8 = out_file.toUtf8();
-    out_filename = "/home/tbiliyor/Desktop/output.mp4";
+    out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation)).toStdString().c_str();
+    out_filename = "C:/Users/turka/Desktop/output.mp4";
     in_filename  = "rtmp://192.168.1.12:8889/live/app";
-    qDebug() << out_filename << in_filename;
+    qDebug() << in_filename << out_filename;
     avformat_network_init();
 }
 
@@ -38,8 +37,7 @@ void ffmpeg_rtmp::setUrl()
     {
         if (interface.flags().testFlag(QNetworkInterface::IsUp) && !interface.flags().testFlag(QNetworkInterface::IsLoopBack))
             foreach (QNetworkAddressEntry entry, interface.addressEntries())
-            {
-                qDebug() << interface.name() + " " + entry.ip().toString() +" " + interface.hardwareAddress();
+            {                
                 if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
                      && !interface.humanReadableName().contains("VM"))
                 {
@@ -48,6 +46,7 @@ void ffmpeg_rtmp::setUrl()
                     const char *data = inUtf8.constData();
                     sendUrl(url);
                     found = true;
+                    qDebug() << interface.name() + " " + entry.ip().toString() + " " + interface.hardwareAddress()  + " " + interface.humanReadableName();
                 }
             }
     }
