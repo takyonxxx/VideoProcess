@@ -42,6 +42,10 @@ win32 {
 
 unix:!macx {
     message("linux enabled")
+    INCLUDEPATH += /usr/include/x86_64-linux-gnu/libavcodec
+    INCLUDEPATH += /usr/include/x86_64-linux-gnu/libavformat
+    INCLUDEPATH += /usr/include/x86_64-linux-gnu/libavfilter
+    LIBS += -L/usr/include/x86_64-linux-gnu/ -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
 }
 
 unix:macx {

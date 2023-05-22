@@ -18,11 +18,11 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     //    av_log_set_level(AV_LOG_DEBUG);
     //    av_log_set_callback(ffmpegLogCallback);
 
-//    QString out_file = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
-//    QByteArray inUtf8 = out_file.toUtf8();
-    out_filename = "C:/Users/turka/Desktop/output.mp4";
-    in_filename  = "rtmp://192.168.1.6:8889/live/app";
-    qDebug() << out_filename;
+    QString out_file = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+    QByteArray inUtf8 = out_file.toUtf8();
+    out_filename = "/home/tbiliyor/Desktop/output.mp4";
+    in_filename  = "rtmp://192.168.1.12:8889/live/app";
+    qDebug() << out_filename << in_filename;
     avformat_network_init();
 }
 
@@ -41,7 +41,7 @@ void ffmpeg_rtmp::setUrl()
             {
                 qDebug() << interface.name() + " " + entry.ip().toString() +" " + interface.hardwareAddress();
                 if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
-                     && !interface.humanReadableName().contains("VM") && interface.name().contains("wireless"))
+                     && !interface.humanReadableName().contains("VM"))
                 {
                     auto url  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
                     QByteArray inUtf8 = url.toUtf8();
