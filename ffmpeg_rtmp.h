@@ -3,6 +3,7 @@
 
 #include <QDebug>
 #include <QThread>
+#include <QNetworkInterface>
 
 #include <stdio.h>
 #include <iostream>
@@ -67,6 +68,7 @@ class ffmpeg_rtmp : public QThread
 public:
     explicit ffmpeg_rtmp(QObject *parent = nullptr);
     void stop();
+    void setUrl();
 private:
     int prepare_ffmpeg();
 
@@ -89,6 +91,7 @@ protected:
 
 signals:
     void sendInfo(QString);
+    void sendUrl(QString);
     void sendConnectionStatus(bool);
     void sendFrame(AVFrame);
 

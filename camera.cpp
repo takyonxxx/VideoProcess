@@ -31,6 +31,7 @@ Camera::Camera()
 
     ui->pushStream->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
     ui->pushExit->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
+    ui->labelRtmpUrl->setStyleSheet("font-size: 14pt; font-weight: bold; color: #ECF0F1;background-color: #2E4053;   padding: 6px; spacing: 6px;");
     ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
 
     m_audioInput.reset(new QAudioInput);
@@ -39,9 +40,11 @@ Camera::Camera()
     m_ffmpeg_rtmp = new ffmpeg_rtmp();
     if(m_ffmpeg_rtmp)
     {
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendUrl,this, &Camera::setUrl);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Camera::setConnectionStatus);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendFrame,this, &Camera::setFrame);
+        m_ffmpeg_rtmp->setUrl();
     }
 
     //Camera devices:
@@ -400,6 +403,11 @@ void Camera::on_pushStream_clicked()
 void Camera::setInfo(QString message)
 {
     ui->textTerminal->append(message);
+}
+
+void Camera::setUrl(QString url)
+{
+    ui->labelRtmpUrl->setText(url);
 }
 
 void Camera::setConnectionStatus(bool status)

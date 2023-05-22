@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = video_process_ai
 
-QT += multimedia multimediawidgets widgets
+QT += multimedia multimediawidgets widgets network
 
 HEADERS = \
     camera.h \

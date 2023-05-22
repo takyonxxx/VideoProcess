@@ -1,5 +1,5 @@
 #include "ffmpeg_rtmp.h"
-
+#include <QStandardPaths>
 
 void ffmpegLogCallback(void *avcl, int level, const char *fmt, va_list vl)
 {
@@ -18,9 +18,11 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     //    av_log_set_level(AV_LOG_DEBUG);
     //    av_log_set_callback(ffmpegLogCallback);
 
-    in_filename  = "rtmp://192.168.1.7:8889/live/app";
-    out_filename = "/Users/turkaybiliyor/Desktop/output.mp4";
-
+//    QString out_file = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+//    QByteArray inUtf8 = out_file.toUtf8();
+    out_filename = "C:/Users/turka/Desktop/output.mp4";
+    in_filename  = "rtmp://192.168.1.6:8889/live/app";
+    qDebug() << out_filename;
     avformat_network_init();
 }
 
@@ -28,6 +30,29 @@ void ffmpeg_rtmp::stop()
 {
     m_stop = true;
 }
+
+void ffmpeg_rtmp::setUrl()
+{
+    bool found = false;
+    foreach(QNetworkInterface interface, QNetworkInterface::allInterfaces())
+    {
+        if (interface.flags().testFlag(QNetworkInterface::IsUp) && !interface.flags().testFlag(QNetworkInterface::IsLoopBack))
+            foreach (QNetworkAddressEntry entry, interface.addressEntries())
+            {
+                qDebug() << interface.name() + " " + entry.ip().toString() +" " + interface.hardwareAddress();
+                if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
+                     && !interface.humanReadableName().contains("VM") && interface.name().contains("wireless"))
+                {
+                    auto url  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
+                    QByteArray inUtf8 = url.toUtf8();
+                    const char *data = inUtf8.constData();
+                    sendUrl(url);
+                    found = true;
+                }
+            }
+    }
+}
+
 
 int ffmpeg_rtmp::prepare_ffmpeg()
 {
@@ -37,18 +62,21 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 
     if (avformat_open_input(&inputContext, in_filename, nullptr, &format_opts) != 0) {
         // Error handling
+        qDebug() << "error avformat_open_input";
         return false;
     }
 
     // Retrieve stream information
     if (avformat_find_stream_info(inputContext, nullptr) < 0) {
         // Error handling
+        qDebug() << "error avformat_find_stream_info";
         return false;
     }
 
     // Create the output file context
     if (avformat_alloc_output_context2(&outputContext, nullptr, nullptr, out_filename) < 0) {
         // Error handling
+        qDebug() << "error avformat_alloc_output_context2";
         return false;
     }
 
@@ -72,19 +100,21 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     // Open the output file for writing
     if (avio_open(&outputContext->pb, out_filename, AVIO_FLAG_WRITE) < 0) {
         // Error handling
+        qDebug() << "error avio_open";
         return false ;
     }
 
     // Write the output file header
     if (avformat_write_header(outputContext, nullptr) < 0) {
         // Error handling
+        qDebug() << "error avformat_write_header";
         return false;
     }
 
     auto codec = avcodec_find_decoder(vid_stream->codecpar->codec_id);
     if (!codec) {
-        fprintf(stderr, "codec not found\n");
-        exit(1);
+        qDebug() << "error avcodec_find_decoder";
+        return false;
     }
     ctx_codec = avcodec_alloc_context3(codec);
 
@@ -93,12 +123,12 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 
     if (avcodec_open2(ctx_codec, codec, nullptr)<0) {
         std::cout << 5;
-        return -1;
+        return false;
     }
 
     frame = av_frame_alloc();
     if (!frame) {
-        qWarning() << "Failed to allocate video frame.";
+        qDebug() << "error av_frame_alloc";
         avcodec_free_context(&ctx_codec);
         return false;
     }
@@ -141,11 +171,11 @@ void ffmpeg_rtmp::run()
             while (ret  >= 0) {
                 ret = avcodec_receive_frame(ctx_codec, frame);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    //std::cout << "avcodec_receive_frame: " << ret << std::endl;
-                    break;
+                    std::cout << "avcodec_receive_frame: " << ret << std::endl;
+                    avcodec_send_packet(ctx_codec, packet);
+                    continue;
                 }
                 emit sendFrame(*frame);
-//                av_frame_free(&frame);
             }
         }
 
@@ -159,7 +189,7 @@ void ffmpeg_rtmp::run()
             av_interleaved_write_frame(outputContext, packet);
         }
 
-        av_packet_unref(packet);        
+        av_packet_unref(packet);
     }
 
     // Write the output file trailer

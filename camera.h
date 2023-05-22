@@ -35,7 +35,7 @@ public slots:
     void saveMetaData();
 
 private slots:
-    void setCamera(const QCameraDevice &cameraDevice);
+    void setCamera(const QCameraDevice &cameraDevice);    
 
     void startCamera();
     void stopCamera();
@@ -77,6 +77,7 @@ private slots:
     void showMetaDataDialog();
 
     void setInfo(QString);
+    void setUrl(QString);
     void setConnectionStatus(bool);
     void setFrame(AVFrame);
 
