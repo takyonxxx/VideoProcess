@@ -43,7 +43,7 @@ void ffmpeg_rtmp::setUrl()
                 if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
                      && !interface.humanReadableName().contains("VM") && !interface.hardwareAddress().startsWith("00:") && interface.hardwareAddress() != "")
                 {
-                    in_filename  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
+                    in_filename  = "rtmp://" + entry.ip().toString() + ":8889/live";
                     emit sendUrl(in_filename);
                     found = true;
                 }
