@@ -62,7 +62,7 @@ Camera::Camera()
     scene->setBackgroundBrush(brush);
     view = ui->graphicsView;
     view->setScene(scene);
-    setCamera(QMediaDevices::defaultVideoInput());
+    //setCamera(QMediaDevices::defaultVideoInput());
 }
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
