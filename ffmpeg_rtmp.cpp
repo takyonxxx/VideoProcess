@@ -17,11 +17,9 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     // Enable FFmpeg logging
     //    av_log_set_level(AV_LOG_DEBUG);
     //    av_log_set_callback(ffmpegLogCallback);
+    //tTM/2!**
 
-    out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation)).toStdString().c_str();
-    out_filename = "C:/Users/turka/Desktop/output.mp4";
-    in_filename  = "rtmp://192.168.1.12:8889/live/app";
-    qDebug() << in_filename << out_filename;
+    out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
 }
 
@@ -37,16 +35,14 @@ void ffmpeg_rtmp::setUrl()
     {
         if (interface.flags().testFlag(QNetworkInterface::IsUp) && !interface.flags().testFlag(QNetworkInterface::IsLoopBack))
             foreach (QNetworkAddressEntry entry, interface.addressEntries())
-            {                
+            {
+                //qDebug() << entry.ip().toString() + " " + interface.hardwareAddress()  + " " + interface.humanReadableName();
                 if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
-                     && !interface.humanReadableName().contains("VM"))
+                     && !interface.humanReadableName().contains("VM") && !interface.hardwareAddress().startsWith("00:"))
                 {
-                    auto url  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
-                    QByteArray inUtf8 = url.toUtf8();
-                    const char *data = inUtf8.constData();
-                    sendUrl(url);
+                    in_filename  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
+                    emit sendUrl(in_filename);
                     found = true;
-                    qDebug() << interface.name() + " " + entry.ip().toString() + " " + interface.hardwareAddress()  + " " + interface.humanReadableName();
                 }
             }
     }
@@ -59,7 +55,7 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     AVDictionary *format_opts = NULL;
     av_dict_set(&format_opts, "timeout", "10", 0);
 
-    if (avformat_open_input(&inputContext, in_filename, nullptr, &format_opts) != 0) {
+    if (avformat_open_input(&inputContext, in_filename.toStdString().c_str() , nullptr, &format_opts) != 0) {
         // Error handling
         qDebug() << "error avformat_open_input";
         return false;
@@ -73,7 +69,7 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     }
 
     // Create the output file context
-    if (avformat_alloc_output_context2(&outputContext, nullptr, nullptr, out_filename) < 0) {
+    if (avformat_alloc_output_context2(&outputContext, nullptr, nullptr, out_filename.toStdString().c_str()) < 0) {
         // Error handling
         qDebug() << "error avformat_alloc_output_context2";
         return false;
@@ -85,9 +81,14 @@ int ffmpeg_rtmp::prepare_ffmpeg()
         outputStream = avformat_new_stream(outputContext, nullptr);
         if (inputContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
         {
-            video_idx = i;
             vid_stream = inputContext->streams[i];
+            video_idx = i;
             qDebug() << "video_idx : " << video_idx;
+        }
+        else if (inputContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            aud_stream = inputContext->streams[i];;
+            audio_idx = i;
+            qDebug() << "audio_idx : " << audio_idx;
         }
         if (!outputStream) {
             // Error handling
@@ -97,7 +98,7 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     }
 
     // Open the output file for writing
-    if (avio_open(&outputContext->pb, out_filename, AVIO_FLAG_WRITE) < 0) {
+    if (avio_open(&outputContext->pb, out_filename.toStdString().c_str(), AVIO_FLAG_WRITE) < 0) {
         // Error handling
         qDebug() << "error avio_open";
         return false ;
@@ -151,8 +152,14 @@ void ffmpeg_rtmp::run()
 
     // Read packets from the input stream and write to the output file
     AVPacket* packet = av_packet_alloc();
+    //    AVStream* videoStream = outputContext->streams[video_idx]; // Video stream
+    //    AVStream* audioStream = outputContext->streams[audio_idx]; // Audio stream
 
-    while (av_read_frame(inputContext, packet) == 0) {
+    //    int64_t videoPts = 0; // Current video presentation timestamp
+    //    int64_t audioPts = 0; // Current audio presentation timestamp
+
+    while (av_read_frame(inputContext, packet) == 0)
+    {
         if(m_stop)
         {
             sendConnectionStatus(false);
@@ -170,13 +177,15 @@ void ffmpeg_rtmp::run()
             while (ret  >= 0) {
                 ret = avcodec_receive_frame(ctx_codec, frame);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    std::cout << "avcodec_receive_frame: " << ret << std::endl;
-                    avcodec_send_packet(ctx_codec, packet);
+                    //std::cout << "avcodec_receive_frame: " << ret << std::endl;
                     continue;
                 }
                 emit sendFrame(*frame);
             }
         }
+
+        AVStream* inputStream = inputContext->streams[packet->stream_index];
+        AVStream* outputStream = outputContext->streams[packet->stream_index];
 
         if (packet->stream_index >= 0 && packet->stream_index < inputContext->nb_streams)
         {

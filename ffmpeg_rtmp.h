@@ -83,9 +83,10 @@ private:
     AVStream *inputStream{nullptr};
     AVStream *outputStream{nullptr};
     AVStream *vid_stream{nullptr};
-    int video_idx;
-
-    const char *in_filename, *out_filename;
+    AVStream *aud_stream{nullptr};
+    int video_idx = -1;
+    int audio_idx = -1;
+    QString in_filename, out_filename;
 protected:
     void run();
 
