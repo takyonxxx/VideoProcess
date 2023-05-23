@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QThread>
 #include <QNetworkInterface>
+#include <QImage>
 
 #include <stdio.h>
 #include <iostream>
@@ -26,6 +27,7 @@ extern "C"
 #include <libavutil/pixdesc.h>
 #include <libavformat/avio.h>
 #include <libavutil/log.h>
+#include <libavformat/version.h>
 };
 #else
 //Linux...
@@ -43,6 +45,7 @@ extern "C"
 #include <libavutil/pixdesc.h>
 #include <libavformat/avio.h>
 #include <libavutil/log.h>
+#include <libavformat/version.h>
 #ifdef __cplusplus
 };
 #endif
@@ -87,6 +90,7 @@ private:
     int video_idx = -1;
     int audio_idx = -1;
     QString in_filename, out_filename;
+    QString video_info;
 protected:
     void run();
 
@@ -94,7 +98,7 @@ signals:
     void sendInfo(QString);
     void sendUrl(QString);
     void sendConnectionStatus(bool);
-    void sendFrame(AVFrame);
+    void sendFrame(QImage);
 
 };
 

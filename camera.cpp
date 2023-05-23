@@ -62,7 +62,7 @@ Camera::Camera()
     scene->setBackgroundBrush(brush);
     view = ui->graphicsView;
     view->setScene(scene);
-    //setCamera(QMediaDevices::defaultVideoInput());
+    setCamera(QMediaDevices::defaultVideoInput());
 }
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
@@ -155,7 +155,7 @@ void Camera::keyReleaseEvent(QKeyEvent *event)
 void Camera::updateRecordTime()
 {
     QString str = QString("Recorded %1 sec").arg(m_mediaRecorder->duration()/1000);
-    ui->statusbar->showMessage(str);
+//    ui->statusbar->showMessage(str);
 }
 
 void Camera::processCapturedImage(int requestId, const QImage& img)
@@ -317,7 +317,7 @@ void Camera::readyForCapture(bool ready)
 void Camera::imageSaved(int id, const QString &fileName)
 {
     Q_UNUSED(id);
-    ui->statusbar->showMessage(tr("Captured \"%1\"").arg(QDir::toNativeSeparators(fileName)));
+//    ui->statusbar->showMessage(tr("Captured \"%1\"").arg(QDir::toNativeSeparators(fileName)));
 
     m_isCapturingImage = false;
     if (m_applicationExiting)
@@ -424,11 +424,8 @@ void Camera::setConnectionStatus(bool status)
     }
 }
 
-void Camera::setFrame(AVFrame frame)
+void Camera::setFrame(QImage image)
 {
-    // Create a QImage from the RGB frame
-    QImage image(frame.data[0], frame.width, frame.height, QImage::Format_RGB888);
-
     scene->clear();
     QGraphicsPixmapItem *pixmapItem = scene->addPixmap(QPixmap::fromImage(image));
     view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);

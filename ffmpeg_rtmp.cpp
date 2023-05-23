@@ -19,6 +19,9 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     //    av_log_set_callback(ffmpegLogCallback);
     //tTM/2!**
 
+    const char* ffmpegVersion = av_version_info();
+    std::cout << "FFmpeg version: " << ffmpegVersion << std::endl;
+
     out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
 }
@@ -38,7 +41,7 @@ void ffmpeg_rtmp::setUrl()
             {
                 //qDebug() << entry.ip().toString() + " " + interface.hardwareAddress()  + " " + interface.humanReadableName();
                 if ( !found && interface.hardwareAddress() != "00:00:00:00:00:00" && entry.ip().toString().contains(".")
-                     && !interface.humanReadableName().contains("VM") && !interface.hardwareAddress().startsWith("00:"))
+                     && !interface.humanReadableName().contains("VM") && !interface.hardwareAddress().startsWith("00:") && interface.hardwareAddress() != "")
                 {
                     in_filename  = "rtmp://" + entry.ip().toString() + ":8889/live/app";
                     emit sendUrl(in_filename);
@@ -54,6 +57,7 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     // Open the RTMP stream
     AVDictionary *format_opts = NULL;
     av_dict_set(&format_opts, "timeout", "10", 0);
+    qDebug() << in_filename;
 
     if (avformat_open_input(&inputContext, in_filename.toStdString().c_str() , nullptr, &format_opts) != 0) {
         // Error handling
@@ -139,30 +143,60 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 void ffmpeg_rtmp::run()
 {
     m_stop = false;
+    int frameCount = 0;
+    int videoWidth = 0;
+    int videoHeight = 0;
 
-    sendInfo("Trying to start Rtmp stream server.");
+    emit sendInfo("Trying to start Rtmp stream server.");
 
     if (!prepare_ffmpeg())
     {
-        sendConnectionStatus(false);
+        emit sendConnectionStatus(false);
         return;
     }
 
-    sendConnectionStatus(true);
+    emit sendConnectionStatus(true);
 
     // Read packets from the input stream and write to the output file
     AVPacket* packet = av_packet_alloc();
-    //    AVStream* videoStream = outputContext->streams[video_idx]; // Video stream
-    //    AVStream* audioStream = outputContext->streams[audio_idx]; // Audio stream
 
-    //    int64_t videoPts = 0; // Current video presentation timestamp
-    //    int64_t audioPts = 0; // Current audio presentation timestamp
+    // Print the video codec
+    if (video_idx != -1) {
+        AVCodecParameters* codecVideoParams = inputContext->streams[video_idx]->codecpar;
+        AVCodecID codecVideoId = codecVideoParams->codec_id;
+        auto codecVideoName = avcodec_get_name(codecVideoId);
+        videoWidth = codecVideoParams->width;
+        videoHeight = codecVideoParams->height;
+
+        AVCodecParameters* codecAudioParams = inputContext->streams[audio_idx]->codecpar;
+        AVCodecID codecAudioId = codecAudioParams->codec_id;
+        auto codecAudioName = avcodec_get_name(codecAudioId);
+
+        video_info = "Video Codec: " + QString(codecVideoName) + " Audio Codec: " + QString(codecAudioName);
+        emit sendInfo(video_info);
+
+        video_info = "Video width: " + QString::number(videoWidth) + " Video height: " + QString::number(videoHeight);
+        emit sendInfo(video_info);
+
+        // Get pixel format name
+        const char* pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecVideoParams->format));
+        if (!pixelFormatName) {
+            video_info = "Unknown pixel format";
+        } else {
+            QString pixelFormat = QString::fromUtf8(pixelFormatName);
+            video_info = "Video Pixel Format: " + pixelFormat;
+        }
+        emit sendInfo(video_info);
+
+    } else {
+        video_info = "Video stream not found ";
+    }
 
     while (av_read_frame(inputContext, packet) == 0)
     {
         if(m_stop)
         {
-            sendConnectionStatus(false);
+            emit sendConnectionStatus(false);
             break;
         }
 
@@ -180,7 +214,29 @@ void ffmpeg_rtmp::run()
                     //std::cout << "avcodec_receive_frame: " << ret << std::endl;
                     continue;
                 }
-                emit sendFrame(*frame);
+
+                SwsContext* swsContext = sws_getContext(frame->width, frame->height, ctx_codec->pix_fmt,
+                                                        frame->width, frame->height, AV_PIX_FMT_RGB32,
+                                                        SWS_BILINEAR, nullptr, nullptr, nullptr);
+                if (!swsContext) {
+                    std::cout << "Failed to create SwsContext" << std::endl;
+                    break;
+                }
+
+                uint8_t* destData[1] = { nullptr };
+                int destLinesize[1] = { 0 };
+
+                QImage image(frame->width, frame->height, QImage::Format_RGB32);
+
+                destData[0] = image.bits();
+                destLinesize[0] = image.bytesPerLine();
+
+                sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height, destData, destLinesize);
+
+                // Cleanup
+                sws_freeContext(swsContext);
+                emit sendFrame(image);
+                frameCount++;
             }
         }
 
@@ -196,7 +252,6 @@ void ffmpeg_rtmp::run()
             packet->pos = -1;
             av_interleaved_write_frame(outputContext, packet);
         }
-
         av_packet_unref(packet);
     }
 

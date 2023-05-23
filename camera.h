@@ -79,7 +79,7 @@ private slots:
     void setInfo(QString);
     void setUrl(QString);
     void setConnectionStatus(bool);
-    void setFrame(AVFrame);
+    void setFrame(QImage);
 
     void on_pushStream_clicked();
     void on_pushExit_clicked();

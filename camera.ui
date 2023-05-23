@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>872</width>
-    <height>484</height>
+    <width>851</width>
+    <height>444</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -37,9 +37,6 @@
         <string>FFmpeg Streamer</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="3" column="1">
-         <widget class="QTextBrowser" name="textTerminal"/>
-        </item>
         <item row="4" column="1">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="sizePolicy">
@@ -51,7 +48,7 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>200</height>
+            <height>0</height>
            </size>
           </property>
           <property name="palette">
@@ -124,7 +121,45 @@
           <widget class="QWidget" name="viewfinderPage">
            <layout class="QGridLayout" name="gridLayout_5">
             <item row="0" column="1">
-             <widget class="QVideoWidget" name="viewfinder" native="true"/>
+             <widget class="QPushButton" name="pushStream">
+              <property name="text">
+               <string>Start</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLabel" name="labelRtmpUrl">
+              <property name="text">
+               <string>rtmp url</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QVideoWidget" name="viewfinder" native="true">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>120</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QTextBrowser" name="textTerminal">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>0</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QPushButton" name="pushExit">
+              <property name="text">
+               <string>Exit</string>
+              </property>
+             </widget>
             </item>
            </layout>
           </widget>
@@ -148,27 +183,6 @@
             </item>
            </layout>
           </widget>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QPushButton" name="pushStream">
-          <property name="text">
-           <string>Start</string>
-          </property>
-         </widget>
-        </item>
-        <item row="5" column="1">
-         <widget class="QPushButton" name="pushExit">
-          <property name="text">
-           <string>Exit</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QLabel" name="labelRtmpUrl">
-          <property name="text">
-           <string>TextLabel</string>
-          </property>
          </widget>
         </item>
        </layout>
@@ -195,7 +209,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>872</width>
+     <width>851</width>
      <height>22</height>
     </rect>
    </property>
@@ -218,7 +232,6 @@
    <addaction name="menuFile"/>
    <addaction name="menuDevices"/>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
   <action name="actionExit">
    <property name="text">
     <string>Close</string>
