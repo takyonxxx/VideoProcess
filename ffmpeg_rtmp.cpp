@@ -15,12 +15,29 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     : QThread{parent}
 {
     // Enable FFmpeg logging
-    av_log_set_level(AV_LOG_DEBUG);
-    av_log_set_callback(ffmpegLogCallback);
+    //    av_log_set_level(AV_LOG_DEBUG);
+    //    av_log_set_callback(ffmpegLogCallback);
     //tTM/2!**
 
     const char* ffmpegVersion = av_version_info();
     std::cout << "FFmpeg version: " << ffmpegVersion << std::endl;
+
+    // QBuffer buffer;
+    QAudioFormat format;
+    format.setSampleFormat(QAudioFormat::Int16);
+    format.setSampleRate(44100);
+    format.setChannelCount(2);
+
+    audio_buffer.open(QIODevice::ReadWrite);
+    audio_buffer.setData(QByteArray(), 0);
+
+    // get default output device
+    QAudioDevice audioDevice(QMediaDevices::defaultAudioOutput());
+    qDebug() << audioDevice.description();
+
+    audioSink = new QAudioSink(format, this);
+    connect(audioSink, SIGNAL(stateChanged(QAudio::State)), this, SLOT(handleStateChanged(QAudio::State)));
+    audioSink->start(&audio_buffer);
 
     out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
@@ -140,6 +157,28 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     return true;
 }
 
+void ffmpeg_rtmp::handleStateChanged(QAudio::State newState)
+{
+    switch (newState) {
+    case QAudio::IdleState:
+        // Finished playing (no more data)
+        audioSink->stop();
+        delete audioSink;
+        break;
+
+    case QAudio::StoppedState:
+        // Stopped for other reasons
+        if (audioSink->error() != QAudio::NoError) {
+            // Error handling
+        }
+        break;
+
+    default:
+        // ... other cases as appropriate
+        break;
+    }
+}
+
 void ffmpeg_rtmp::run()
 {
     m_stop = false;
@@ -200,7 +239,13 @@ void ffmpeg_rtmp::run()
             break;
         }
 
-        // for preview get only video
+        if (packet->stream_index == audio_idx)
+        {
+            QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
+            audio_buffer.write(audioData);
+        }
+
+        // for preview
         if (packet->stream_index == video_idx)
         {
             int ret = avcodec_send_packet(ctx_codec, packet);
@@ -257,6 +302,9 @@ void ffmpeg_rtmp::run()
         }
         av_packet_unref(packet);
     }
+
+    audioSink->stop();
+    delete audioSink;
 
     // Write the output file trailer
     av_write_trailer(outputContext);

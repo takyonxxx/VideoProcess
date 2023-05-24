@@ -5,6 +5,14 @@
 #include <QThread>
 #include <QNetworkInterface>
 #include <QImage>
+#include <QAudioFormat>
+#include <QAudioOutput>
+#include <QMediaDevices>
+#include <QAudioDevice>
+#include <QAudioSource>
+#include <QAudioBuffer>
+#include <QAudioSink>
+#include <QBuffer>
 
 #include <stdio.h>
 #include <iostream>
@@ -51,19 +59,6 @@ extern "C"
 #endif
 #endif
 
-class AVFrameWrapper : public QObject
-{
-    Q_OBJECT
-
-public:
-    AVFrameWrapper(AVFrame frame) : QObject(), framePtr(frame) {}
-
-    AVFrame getFrame() const { return framePtr; }
-
-private:
-    AVFrame framePtr;
-};
-
 
 class ffmpeg_rtmp : public QThread
 {
@@ -72,6 +67,9 @@ public:
     explicit ffmpeg_rtmp(QObject *parent = nullptr);
     void stop();
     void setUrl();
+public slots:
+    void handleStateChanged(QAudio::State newState);
+
 private:
     int prepare_ffmpeg();
 
@@ -91,6 +89,8 @@ private:
     int audio_idx = -1;
     QString in_filename, out_filename;
     QString video_info;
+    QAudioSink *audioSink{nullptr};
+    QBuffer audio_buffer;
 protected:
     void run();
 
