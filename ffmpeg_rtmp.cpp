@@ -15,8 +15,8 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     : QThread{parent}
 {
     // Enable FFmpeg logging
-    //    av_log_set_level(AV_LOG_DEBUG);
-    //    av_log_set_callback(ffmpegLogCallback);
+    av_log_set_level(AV_LOG_DEBUG);
+    av_log_set_callback(ffmpegLogCallback);
     //tTM/2!**
 
     const char* ffmpegVersion = av_version_info();
@@ -222,6 +222,9 @@ void ffmpeg_rtmp::run()
                     std::cout << "Failed to create SwsContext" << std::endl;
                     break;
                 }
+
+                // Initialize the SwsContext
+                sws_init_context(swsContext, nullptr, nullptr);
 
                 uint8_t* destData[1] = { nullptr };
                 int destLinesize[1] = { 0 };
