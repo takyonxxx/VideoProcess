@@ -15,29 +15,24 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     : QThread{parent}
 {
     // Enable FFmpeg logging
-    //    av_log_set_level(AV_LOG_DEBUG);
+    av_log_set_level(AV_LOG_ERROR);
     //    av_log_set_callback(ffmpegLogCallback);
     //tTM/2!**
 
     const char* ffmpegVersion = av_version_info();
     std::cout << "FFmpeg version: " << ffmpegVersion << std::endl;
 
-    // QBuffer buffer;
-    QAudioFormat format;
-    format.setSampleFormat(QAudioFormat::Int16);
-    format.setSampleRate(44100);
-    format.setChannelCount(2);
+    m_devices = new QMediaDevices(this);
 
-    audio_buffer.open(QIODevice::ReadWrite);
-    audio_buffer.setData(QByteArray(), 0);
+    auto deviceInfo = m_devices->defaultAudioOutput();
+    QAudioFormat format = deviceInfo.preferredFormat();
 
-    // get default output device
-    QAudioDevice audioDevice(QMediaDevices::defaultAudioOutput());
-    qDebug() << audioDevice.description();
+    m_audioOutput.reset(new QAudioSink(deviceInfo, format));
+    qreal initialVolume = QAudio::convertVolume(m_audioOutput->volume(),
+                                                QAudio::LinearVolumeScale,
+                                                QAudio::LogarithmicVolumeScale);
 
-    audioSink = new QAudioSink(format, this);
-    connect(audioSink, SIGNAL(stateChanged(QAudio::State)), this, SLOT(handleStateChanged(QAudio::State)));
-    audioSink->start(&audio_buffer);
+    qDebug() << deviceInfo.description() << initialVolume;
 
     out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
@@ -61,6 +56,7 @@ void ffmpeg_rtmp::setUrl()
                      && !interface.humanReadableName().contains("VM") && !interface.hardwareAddress().startsWith("00:") && interface.hardwareAddress() != "")
                 {
                     in_filename  = "rtmp://" + entry.ip().toString() + ":8889/live";
+                    qDebug() << in_filename;
                     emit sendUrl(in_filename);
                     found = true;
                 }
@@ -74,7 +70,6 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     // Open the RTMP stream
     AVDictionary *format_opts = NULL;
     av_dict_set(&format_opts, "timeout", "10", 0);
-    qDebug() << in_filename;
 
     if (avformat_open_input(&inputContext, in_filename.toStdString().c_str() , nullptr, &format_opts) != 0) {
         // Error handling
@@ -132,59 +127,60 @@ int ffmpeg_rtmp::prepare_ffmpeg()
         return false;
     }
 
-    auto codec = avcodec_find_decoder(vid_stream->codecpar->codec_id);
-    if (!codec) {
-        qDebug() << "error avcodec_find_decoder";
+    auto video_codec = avcodec_find_decoder(vid_stream->codecpar->codec_id);
+    if (!video_codec) {
+        qDebug() << "error video avcodec_find_decoder";
         return false;
     }
-    ctx_codec = avcodec_alloc_context3(codec);
+    videoCodecContext = avcodec_alloc_context3(video_codec);
 
-    if(avcodec_parameters_to_context(ctx_codec, vid_stream->codecpar)<0)
+    if(avcodec_parameters_to_context(videoCodecContext, vid_stream->codecpar)<0)
         std::cout << 512;
 
-    if (avcodec_open2(ctx_codec, codec, nullptr)<0) {
+    if (avcodec_open2(videoCodecContext, video_codec, nullptr)<0) {
         std::cout << 5;
         return false;
     }
 
-    frame = av_frame_alloc();
-    if (!frame) {
-        qDebug() << "error av_frame_alloc";
-        avcodec_free_context(&ctx_codec);
+    auto audio_codec = avcodec_find_decoder(aud_stream->codecpar->codec_id);
+    if (!audio_codec) {
+        qDebug() << "error audio avcodec_find_decoder";
+        return false;
+    }
+    audioCodecContext = avcodec_alloc_context3(audio_codec);
+
+    if(avcodec_parameters_to_context(audioCodecContext, aud_stream->codecpar)<0)
+        std::cout << 512;
+
+    if (avcodec_open2(audioCodecContext, audio_codec, nullptr)<0) {
+        std::cout << 5;
+        return false;
+    }
+
+    video_frame = av_frame_alloc();
+    if (!video_frame) {
+        qDebug() << "error video av_frame_alloc";
+        avcodec_free_context(&videoCodecContext);
+        return false;
+    }
+
+    audio_frame = av_frame_alloc();
+    if (!audio_frame) {
+        qDebug() << "error audio av_frame_alloc";
+        avcodec_free_context(&audioCodecContext);
         return false;
     }
 
     return true;
 }
 
-void ffmpeg_rtmp::handleStateChanged(QAudio::State newState)
-{
-    switch (newState) {
-    case QAudio::IdleState:
-        // Finished playing (no more data)
-        audioSink->stop();
-        delete audioSink;
-        break;
-
-    case QAudio::StoppedState:
-        // Stopped for other reasons
-        if (audioSink->error() != QAudio::NoError) {
-            // Error handling
-        }
-        break;
-
-    default:
-        // ... other cases as appropriate
-        break;
-    }
-}
-
 void ffmpeg_rtmp::run()
 {
     m_stop = false;
-    int frameCount = 0;
     int videoWidth = 0;
     int videoHeight = 0;
+
+    m_ioAudioDevice = m_audioOutput->start();
 
     emit sendInfo("Trying to start Rtmp stream server.");
 
@@ -231,37 +227,53 @@ void ffmpeg_rtmp::run()
         video_info = "Video stream not found ";
     }
 
-    while (av_read_frame(inputContext, packet) == 0)
+    while (!m_stop)
     {
-        if(m_stop)
+        int ret = av_read_frame(inputContext, packet);
+        if(ret < 0)
         {
-            emit sendConnectionStatus(false);
+            std::cout << "there is no packet!" << ret << std::endl;
             break;
         }
 
+        //for audio
         if (packet->stream_index == audio_idx)
         {
-            QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
-            audio_buffer.write(audioData);
+//            QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
+//            m_ioAudioDevice->write(audioData);
+            int ret = avcodec_send_packet(audioCodecContext, packet);
+            if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                std::cout << "audio avcodec_send_packet: " << ret << std::endl;
+                break;
+            }
+            while (ret  >= 0) {
+                ret = avcodec_receive_frame(audioCodecContext, audio_frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    //std::cout << "audio avcodec_receive_frame: " << ret << std::endl;
+                    break;
+                }
+
+                m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0]), audio_frame->linesize[0]);
+            }
         }
 
         // for preview
         if (packet->stream_index == video_idx)
         {
-            int ret = avcodec_send_packet(ctx_codec, packet);
+            int ret = avcodec_send_packet(videoCodecContext, packet);
             if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                std::cout << "avcodec_send_packet: " << ret << std::endl;
+                std::cout << "video avcodec_send_packet: " << ret << std::endl;
                 break;
             }
             while (ret  >= 0) {
-                ret = avcodec_receive_frame(ctx_codec, frame);
+                ret = avcodec_receive_frame(videoCodecContext, video_frame);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    //std::cout << "avcodec_receive_frame: " << ret << std::endl;
-                    continue;
+                    //std::cout << "video avcodec_receive_frame: " << ret << std::endl;
+                    break;
                 }
 
-                SwsContext* swsContext = sws_getContext(frame->width, frame->height, ctx_codec->pix_fmt,
-                                                        frame->width, frame->height, AV_PIX_FMT_RGB32,
+                SwsContext* swsContext = sws_getContext(video_frame->width, video_frame->height, videoCodecContext->pix_fmt,
+                                                        video_frame->width, video_frame->height, AV_PIX_FMT_RGB32,
                                                         SWS_BILINEAR, nullptr, nullptr, nullptr);
                 if (!swsContext) {
                     std::cout << "Failed to create SwsContext" << std::endl;
@@ -274,17 +286,16 @@ void ffmpeg_rtmp::run()
                 uint8_t* destData[1] = { nullptr };
                 int destLinesize[1] = { 0 };
 
-                QImage image(frame->width, frame->height, QImage::Format_RGB32);
+                QImage image(video_frame->width, video_frame->height, QImage::Format_RGB32);
 
                 destData[0] = image.bits();
                 destLinesize[0] = image.bytesPerLine();
 
-                sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height, destData, destLinesize);
+                sws_scale(swsContext, video_frame->data, video_frame->linesize, 0, video_frame->height, destData, destLinesize);
 
                 // Cleanup
                 sws_freeContext(swsContext);
                 emit sendFrame(image);
-                frameCount++;
             }
         }
 
@@ -303,8 +314,10 @@ void ffmpeg_rtmp::run()
         av_packet_unref(packet);
     }
 
-    audioSink->stop();
-    delete audioSink;
+    emit sendConnectionStatus(false);
+    m_audioOutput->stop();
+
+//    m_audioOutput->disconnect(this);
 
     // Write the output file trailer
     av_write_trailer(outputContext);

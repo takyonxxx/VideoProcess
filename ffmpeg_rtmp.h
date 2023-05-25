@@ -5,14 +5,9 @@
 #include <QThread>
 #include <QNetworkInterface>
 #include <QImage>
-#include <QAudioFormat>
-#include <QAudioOutput>
 #include <QMediaDevices>
-#include <QAudioDevice>
-#include <QAudioSource>
-#include <QAudioBuffer>
 #include <QAudioSink>
-#include <QBuffer>
+#include <QScopedPointer>
 
 #include <stdio.h>
 #include <iostream>
@@ -67,9 +62,6 @@ public:
     explicit ffmpeg_rtmp(QObject *parent = nullptr);
     void stop();
     void setUrl();
-public slots:
-    void handleStateChanged(QAudio::State newState);
-
 private:
     int prepare_ffmpeg();
 
@@ -78,8 +70,10 @@ private:
     //Input AVFormatContext and Output AVFormatContext
     AVFormatContext* inputContext{nullptr};
     AVFormatContext* outputContext{nullptr};
-    AVCodecContext *ctx_codec{nullptr};
-    AVFrame *frame{nullptr};
+    AVCodecContext *videoCodecContext{nullptr};
+    AVCodecContext *audioCodecContext{nullptr};
+    AVFrame *video_frame{nullptr};
+    AVFrame *audio_frame{nullptr};
     AVFrame *frameRGB{nullptr};
     AVStream *inputStream{nullptr};
     AVStream *outputStream{nullptr};
@@ -89,8 +83,11 @@ private:
     int audio_idx = -1;
     QString in_filename, out_filename;
     QString video_info;
-    QAudioSink *audioSink{nullptr};
-    QBuffer audio_buffer;
+
+    QMediaDevices *m_devices{nullptr};
+    QIODevice *m_ioAudioDevice{nullptr};
+    QScopedPointer<QAudioSink> m_audioOutput;
+
 protected:
     void run();
 
