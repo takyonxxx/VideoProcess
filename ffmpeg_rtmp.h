@@ -64,6 +64,7 @@ public:
     void setUrl();
 private:
     int prepare_ffmpeg();
+    void set_parameters();
 
     bool m_stop {false};
 
@@ -82,7 +83,7 @@ private:
     int video_idx = -1;
     int audio_idx = -1;
     QString in_filename, out_filename;
-    QString video_info;
+    QString info;
 
     QMediaDevices *m_devices{nullptr};
     QIODevice *m_ioAudioDevice{nullptr};

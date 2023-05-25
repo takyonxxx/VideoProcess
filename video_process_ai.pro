@@ -66,5 +66,5 @@ ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 OTHER_FILES += android/AndroidManifest.xml
 
 # ffmpeg -re -i test.flv  -vcodec libx264 -preset fast -crf 30 -acodec aac -ab 128k -ar 44100 -strict experimental -f flv rtmp://192.168.1.6:8889/live
-# ffmpeg -re -i test.flv  -vcodec libx264 -preset fast -crf 30 -acodec aac -ab 128k -ar 44100 -strict experimental -f flv rtmp://172.26.243.34:8889/live
+# ffmpeg -re -i test.flv  -vcodec libx264 -preset fast -crf 30 -acodec aac -ab 128k -ar 44100 -strict experimental -f flv rtmp://172.26.241.24:8889/live
 

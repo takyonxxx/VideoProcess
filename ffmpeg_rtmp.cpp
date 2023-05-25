@@ -24,16 +24,6 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
 
     m_devices = new QMediaDevices(this);
 
-    auto deviceInfo = m_devices->defaultAudioOutput();
-    QAudioFormat format = deviceInfo.preferredFormat();
-
-    m_audioOutput.reset(new QAudioSink(deviceInfo, format));
-    qreal initialVolume = QAudio::convertVolume(m_audioOutput->volume(),
-                                                QAudio::LinearVolumeScale,
-                                                QAudio::LogarithmicVolumeScale);
-
-    qDebug() << deviceInfo.description() << initialVolume;
-
     out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
 }
@@ -148,6 +138,7 @@ int ffmpeg_rtmp::prepare_ffmpeg()
         return false;
     }
     audioCodecContext = avcodec_alloc_context3(audio_codec);
+    /* put sample parameters */
 
     if(avcodec_parameters_to_context(audioCodecContext, aud_stream->codecpar)<0)
         std::cout << 512;
@@ -174,13 +165,58 @@ int ffmpeg_rtmp::prepare_ffmpeg()
     return true;
 }
 
-void ffmpeg_rtmp::run()
+void ffmpeg_rtmp::set_parameters()
 {
-    m_stop = false;
     int videoWidth = 0;
     int videoHeight = 0;
 
+    AVCodecParameters* codecVideoParams = inputContext->streams[video_idx]->codecpar;
+    AVCodecID codecVideoId = codecVideoParams->codec_id;
+    auto codecVideoName = avcodec_get_name(codecVideoId);
+    videoWidth = codecVideoParams->width;
+    videoHeight = codecVideoParams->height;
+
+    AVCodecParameters* codecAudioParams = inputContext->streams[audio_idx]->codecpar;
+    AVCodecID codecAudioId = codecAudioParams->codec_id;
+    auto codecAudioName = avcodec_get_name(codecAudioId);
+
+    info = "Video Codec: " + QString(codecVideoName);
+    emit sendInfo(info);
+
+    info = "Video width: " + QString::number(videoWidth) + " Video height: " + QString::number(videoHeight);
+    emit sendInfo(info);
+
+    // Get pixel format name
+    const char* pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecVideoParams->format));
+    if (!pixelFormatName) {
+        info = "Unknown pixel format";
+    } else {
+        QString pixelFormat = QString::fromUtf8(pixelFormatName);
+        info = "Video Pixel Format: " + pixelFormat;
+    }
+    emit sendInfo(info);
+
+    auto deviceInfo = m_devices->defaultAudioOutput();
+    QAudioFormat format = deviceInfo.preferredFormat();
+    format.setSampleRate(codecAudioParams->sample_rate);
+    format.setChannelCount(codecAudioParams->ch_layout.nb_channels);
+
+    m_audioOutput.reset(new QAudioSink(deviceInfo, format));
+    qreal initialVolume = QAudio::convertVolume(m_audioOutput->volume(),
+                                                QAudio::LinearVolumeScale,
+                                                QAudio::LogarithmicVolumeScale);
+
+    info = "Audio Device: " + deviceInfo.description() + " Volume: " + QString::number(initialVolume);
+    emit sendInfo(info);
+    info = "Audio Codec: " + QString(codecAudioName) + " sr: " + QString::number(codecAudioParams->sample_rate) + " ch: " + QString::number(codecAudioParams->ch_layout.nb_channels);
+    emit sendInfo(info);
+
     m_ioAudioDevice = m_audioOutput->start();
+}
+
+void ffmpeg_rtmp::run()
+{
+    m_stop = false;
 
     emit sendInfo("Trying to start Rtmp stream server.");
 
@@ -190,42 +226,20 @@ void ffmpeg_rtmp::run()
         return;
     }
 
+    // Print the video codec
+    if (video_idx != -1 && audio_idx != -1) {
+        set_parameters();
+
+    } else {
+        info = "Video or Audio stream not found ";
+        emit sendInfo(info);
+        return;
+    }
+
     emit sendConnectionStatus(true);
 
     // Read packets from the input stream and write to the output file
     AVPacket* packet = av_packet_alloc();
-
-    // Print the video codec
-    if (video_idx != -1) {
-        AVCodecParameters* codecVideoParams = inputContext->streams[video_idx]->codecpar;
-        AVCodecID codecVideoId = codecVideoParams->codec_id;
-        auto codecVideoName = avcodec_get_name(codecVideoId);
-        videoWidth = codecVideoParams->width;
-        videoHeight = codecVideoParams->height;
-
-        AVCodecParameters* codecAudioParams = inputContext->streams[audio_idx]->codecpar;
-        AVCodecID codecAudioId = codecAudioParams->codec_id;
-        auto codecAudioName = avcodec_get_name(codecAudioId);
-
-        video_info = "Video Codec: " + QString(codecVideoName) + " Audio Codec: " + QString(codecAudioName);
-        emit sendInfo(video_info);
-
-        video_info = "Video width: " + QString::number(videoWidth) + " Video height: " + QString::number(videoHeight);
-        emit sendInfo(video_info);
-
-        // Get pixel format name
-        const char* pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecVideoParams->format));
-        if (!pixelFormatName) {
-            video_info = "Unknown pixel format";
-        } else {
-            QString pixelFormat = QString::fromUtf8(pixelFormatName);
-            video_info = "Video Pixel Format: " + pixelFormat;
-        }
-        emit sendInfo(video_info);
-
-    } else {
-        video_info = "Video stream not found ";
-    }
 
     while (!m_stop)
     {
@@ -239,8 +253,8 @@ void ffmpeg_rtmp::run()
         //for audio
         if (packet->stream_index == audio_idx)
         {
-//            QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
-//            m_ioAudioDevice->write(audioData);
+            //            QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
+            //            m_ioAudioDevice->write(audioData);
             int ret = avcodec_send_packet(audioCodecContext, packet);
             if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
                 std::cout << "audio avcodec_send_packet: " << ret << std::endl;
@@ -317,7 +331,7 @@ void ffmpeg_rtmp::run()
     emit sendConnectionStatus(false);
     m_audioOutput->stop();
 
-//    m_audioOutput->disconnect(this);
+    //    m_audioOutput->disconnect(this);
 
     // Write the output file trailer
     av_write_trailer(outputContext);
