@@ -26,6 +26,7 @@ extern "C"
 #include <libavfilter/buffersrc.h>
 #include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavformat/avio.h>
@@ -44,6 +45,7 @@ extern "C"
 #include <libavfilter/buffersrc.h>
 #include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavformat/avio.h>

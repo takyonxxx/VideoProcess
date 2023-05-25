@@ -267,7 +267,28 @@ void ffmpeg_rtmp::run()
                     break;
                 }
 
+//                SwrContext *resample_context = NULL;
+//                swr_alloc_set_opts2(&resample_context,
+//                                                &audioCodecContext->ch_layout,
+//                                                AV_SAMPLE_FMT_FLTP, 44100,
+//                                                &audioCodecContext->ch_layout,
+//                                                AV_SAMPLE_FMT_FLTP, 44100, 0, NULL);
+
+
+//                if(swr_init(resample_context) < 0)
+//                    break;
+
+//                AVFrame* resampled_frame = av_frame_alloc();
+//                resampled_frame->sample_rate = audio_frame->sample_rate;
+//                resampled_frame->ch_layout = audio_frame->ch_layout;
+//                resampled_frame->ch_layout.nb_channels = audio_frame->ch_layout.nb_channels;
+//                resampled_frame->format = AV_SAMPLE_FMT_FLTP;
+
+//                swr_convert_frame(resample_context, resampled_frame, audio_frame);
+//                av_frame_unref(audio_frame);
+
                 m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0]), audio_frame->linesize[0]);
+                av_frame_unref(audio_frame);
             }
         }
 
@@ -310,6 +331,7 @@ void ffmpeg_rtmp::run()
                 // Cleanup
                 sws_freeContext(swsContext);
                 emit sendFrame(image);
+                av_frame_unref(video_frame);
             }
         }
 
