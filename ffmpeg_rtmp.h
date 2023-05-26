@@ -66,7 +66,9 @@ public:
     void setUrl();
 private:
     int prepare_ffmpeg();
-    void set_parameters();
+    int start_audio_device();
+    int set_parameters();
+    void start_streamer();
 
     bool m_stop {false};
 
@@ -82,14 +84,14 @@ private:
     AVStream *outputStream{nullptr};
     AVStream *vid_stream{nullptr};
     AVStream *aud_stream{nullptr};
+//    SwrContext* swrAudioContext{nullptr};
+
     int video_idx = -1;
     int audio_idx = -1;
     QString in_filename, out_filename;
     QString info;
-
-    QMediaDevices *m_devices{nullptr};
-    QIODevice *m_ioAudioDevice{nullptr};
-    QScopedPointer<QAudioSink> m_audioOutput;
+    QIODevice *m_ioAudioDevice{nullptr};   
+    QScopedPointer<QAudioSink> m_audioOutput{};
 
 protected:
     void run();

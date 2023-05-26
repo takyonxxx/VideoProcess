@@ -1,43 +1,47 @@
-//#ifndef TEMPLATE_H
-//#define TEMPLATE_H
-//SwsContext *swsContext = sws_alloc_context();
-//int width = 1280;
-//int height = 720;
+//AVFrame* convertedAudioFrame = av_frame_alloc();
+//if (!convertedAudioFrame) {
+//    fprintf(stderr, "Error allocating converted audio AVFrame.\n");
+//    return;
+//}
+//    swrAudioContext = swr_alloc();
+//    if (!swrAudioContext) {
+//        fprintf(stderr, "Error allocating SwrContext.\n");
+//        return false;
+//    }
+//    av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
+//    av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
+//    av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
+//    av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
+//    av_opt_set_sample_fmt(swrAudioContext, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
+//    av_opt_set_sample_fmt(swrAudioContext, "out_sample_fmt", audioCodecContext->sample_fmt, 0);
 
-//AVFrame* frameRGB;    // Output frame in RGB format
+//    if (swr_init(swrAudioContext) < 0) {
+//        fprintf(stderr, "Error initializing SwrContext.\n");
+//        return false;
+//    }
+//                convertedFrame->ch_layout = audioCodecContext->ch_layout;
+//                convertedFrame->format = audioCodecContext->sample_fmt;
+//                convertedFrame->sample_rate = audioCodecContext->sample_rate;
+//                convertedFrame->nb_samples = audio_frame->nb_samples;
 
-//frameRGB = av_frame_alloc();
-//frameRGB->format = AV_PIX_FMT_BGR24;
-//frameRGB->width = width;
-//frameRGB->height = height;
-//av_frame_get_buffer(frameRGB, 0);
+//                if (av_frame_get_buffer(convertedFrame, 0) < 0) {
+//                    fprintf(stderr, "Error allocating converted frame buffer.\n");
+//                    av_frame_free(&convertedFrame);
+//                    break;
+//                }
 
-//swsContext = sws_getContext(
-//            width, height, AVPixelFormat::AV_PIX_FMT_YUV420P, width, height,
-//            AVPixelFormat::AV_PIX_FMT_RGB24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+//                swr_convert_frame(swrAudioContext, convertedFrame, audio_frame);
+//                if(m_ioAudioDevice)
+//                    m_ioAudioDevice->write(reinterpret_cast<char*>(convertedFrame->data[0]), convertedFrame->linesize[0]);
 
+//                av_frame_free(&convertedFrame);
 
-//    auto v_format = QVideoFrameFormat(image.size(), QVideoFrameFormat::pixelFormatFromImageFormat(image.format()));
-//    QVideoFrame v_frame(v_format);
-//    v_frame.map(QVideoFrame::WriteOnly);
-
-//    // Copy pixel data from QImage to QVideoFrame
-//    const uchar* srcBits = image.constBits();
-//    uchar* destBits = v_frame.bits(0);
-//    int bytesPerLine = v_frame.bytesPerLine(0);
-//    for (int y = 0; y < image.height(); ++y) {
-//        memcpy(destBits, srcBits, bytesPerLine);
-//        srcBits += image.bytesPerLine();
-//        destBits += bytesPerLine;
+//    //    Open the output file
+//    auto file_mp3 = QString("%1/output.mp3").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
+//    FILE* outputMp3File = fopen(file_mp3.toStdString().c_str(), "wb");
+//    if (!outputMp3File) {
+//        return;
 //    }
 
-//        QString streamUrl  = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8";
-//        player = new QMediaPlayer;
-//        player->setVideoOutput(ui->viewfinder);
-//        player->setSource(QUrl(streamUrl));
-//        connect(player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString& errorString)
-//        {
-//            qDebug() << "Error:" << errorString;
-//        });
-//        player->play();
-//#endif // TEMPLATE_H
+
+//    fwrite(audio_frame->data[0], 1, audio_frame->linesize[0], outputMp3File);
