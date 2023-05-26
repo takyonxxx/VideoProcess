@@ -11,6 +11,19 @@ void ffmpegLogCallback(void *avcl, int level, const char *fmt, va_list vl)
     }
 }
 
+void printAudioFrameInfo(const AVCodecContext* codecContext, const AVFrame* frame)
+{
+    // See the following to know what data type (unsigned char, short, float, etc) to use to access the audio data:
+    // http://ffmpeg.org/doxygen/trunk/samplefmt_8h.html#af9a51ca15301871723577c730b5865c5
+    std::cout << "Audio frame info:\n"
+              << "  Sample count: " << frame->nb_samples << '\n'
+              << "  Channel count: " << codecContext->ch_layout.nb_channels << '\n'
+              << "  Format: " << av_get_sample_fmt_name(codecContext->sample_fmt) << '\n'
+              << "  Bytes per sample: " << av_get_bytes_per_sample(codecContext->sample_fmt) << '\n'
+              << "  Is planar? " << av_sample_fmt_is_planar(codecContext->sample_fmt) << '\n';
+}
+
+
 ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     : QThread{parent}
 {
@@ -168,8 +181,8 @@ int ffmpeg_rtmp::start_audio_device()
     QAudioFormat format;
     format.setChannelCount(audioCodecContext->ch_layout.nb_channels);
     format.setSampleRate(audioCodecContext->sample_rate);
-    format.setSampleFormat(QAudioFormat::Float);
-    //format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
+    format.setSampleFormat(QAudioFormat::Int16);
+    format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
 
     qDebug() << format.sampleRate() << format.channelCount() << format.sampleFormat();
 
@@ -232,7 +245,9 @@ int ffmpeg_rtmp::set_parameters()
     }
     emit sendInfo(info);
 
-    info = "Audio Codec: " + QString(codecAudioName) + " sr: " + QString::number(codecAudioParams->sample_rate) + " ch: " + QString::number(codecAudioParams->ch_layout.nb_channels);
+    info = "Audio Codec: " + QString(codecAudioName) + " sr: " + QString::number(codecAudioParams->sample_rate);
+    emit sendInfo(info);
+    info = "Audio Format: " + QString(av_get_sample_fmt_name(audioCodecContext->sample_fmt)) + " Channels: " + QString::number(codecAudioParams->ch_layout.nb_channels);
     emit sendInfo(info);
 
     m_ioAudioDevice = m_audioOutput->start();
@@ -281,12 +296,13 @@ void ffmpeg_rtmp::start_streamer()
         fprintf(stderr, "Error allocating SwrContext.\n");
         return;
     }
+
     av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
     av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
     av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
     av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
     av_opt_set_sample_fmt(swrAudioContext, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
-    av_opt_set_sample_fmt(swrAudioContext, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+    av_opt_set_sample_fmt(swrAudioContext, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
 
     if (swr_init(swrAudioContext) < 0) {
         fprintf(stderr, "Error initializing SwrContext.\n");
@@ -305,110 +321,100 @@ void ffmpeg_rtmp::start_streamer()
             break;
         }
 
+        if (packet->stream_index == audio_idx)
+        {
+            // QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
+            // m_ioAudioDevice->write(audioData);
+            int ret = avcodec_send_packet(audioCodecContext, packet);
+            if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                std::cout << "audio avcodec_send_packet: " << ret << std::endl;
+                break;
+            }
+            while (ret  >= 0) {
+                ret = avcodec_receive_frame(audioCodecContext, audio_frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    //std::cout << "audio avcodec_receive_frame: " << ret << std::endl;
+                    break;
+                }
+
+                convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
+                convertedAudioFrame->format = AV_SAMPLE_FMT_S16;
+                convertedAudioFrame->sample_rate = audioCodecContext->sample_rate;
+                convertedAudioFrame->nb_samples = audio_frame->nb_samples;
+
+                if (av_frame_get_buffer(convertedAudioFrame, 0) < 0) {
+                    fprintf(stderr, "Error allocating converted frame buffer.\n");
+                    av_frame_free(&convertedAudioFrame);
+                    break;
+                }
+                swr_convert_frame(swrAudioContext, convertedAudioFrame, audio_frame);
+
+//              printAudioFrameInfo(audioCodecContext, convertedAudioFrame);
+                if(m_ioAudioDevice)
+                    m_ioAudioDevice->write(reinterpret_cast<char*>(convertedAudioFrame->data[0] ), convertedAudioFrame->linesize[0]);
+
+            }
+            av_frame_unref(audio_frame);
+        }
+        // for preview
+        else if (packet->stream_index == video_idx)
+        {
+            int ret = avcodec_send_packet(videoCodecContext, packet);
+            if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                std::cout << "video avcodec_send_packet: " << ret << std::endl;
+                break;
+            }
+            while (ret  >= 0) {
+                ret = avcodec_receive_frame(videoCodecContext, video_frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    //std::cout << "video avcodec_receive_frame: " << ret << std::endl;
+                    break;
+                }
+
+                SwsContext* swsContext = sws_getContext(video_frame->width, video_frame->height, videoCodecContext->pix_fmt,
+                                                        video_frame->width, video_frame->height, AV_PIX_FMT_RGB32,
+                                                        SWS_BILINEAR, nullptr, nullptr, nullptr);
+                if (!swsContext) {
+                    std::cout << "Failed to create SwsContext" << std::endl;
+                    break;
+                }
+
+                // Initialize the SwsContext
+                auto ret = sws_init_context(swsContext, nullptr, nullptr);
+                if (ret < 0) {
+                    std::cout << "Failed to init SwsContext" << std::endl;
+                    break;
+                }
+
+                uint8_t* destData[1] = { nullptr };
+                int destLinesize[1] = { 0 };
+
+                QImage image(video_frame->width, video_frame->height, QImage::Format_RGB32);
+
+                destData[0] = image.bits();
+                destLinesize[0] = image.bytesPerLine();
+
+                sws_scale(swsContext, video_frame->data, video_frame->linesize, 0, video_frame->height, destData, destLinesize);
+                emit sendFrame(image);
+
+                // Cleanup
+                sws_freeContext(swsContext);
+                av_frame_unref(video_frame);
+            }
+        }
+
         AVStream* inputStream = inputContext->streams[packet->stream_index];
         AVStream* outputStream = outputContext->streams[packet->stream_index];
 
         if (packet->stream_index >= 0 && (unsigned int)packet->stream_index < inputContext->nb_streams)
         {
-
             // Rescale packet timestamps
             packet->pts = av_rescale_q(packet->pts, inputStream->time_base, outputStream->time_base);
             packet->dts = av_rescale_q(packet->dts, inputStream->time_base, outputStream->time_base);
             packet->duration = av_rescale_q(packet->duration, inputStream->time_base, outputStream->time_base);
-            packet->pos = -1;
-
-            if (packet->stream_index == audio_idx)
-            {
-                // QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
-                // m_ioAudioDevice->write(audioData);
-                int ret = avcodec_send_packet(audioCodecContext, packet);
-                if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    std::cout << "audio avcodec_send_packet: " << ret << std::endl;
-                    break;
-                }
-                while (ret  >= 0) {
-                    ret = avcodec_receive_frame(audioCodecContext, audio_frame);
-                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                        //std::cout << "audio avcodec_receive_frame: " << ret << std::endl;
-                        break;
-                    }
-
-                    AVFrame* convertedAudioFrame = av_frame_alloc();
-                    if (!convertedAudioFrame) {
-                        fprintf(stderr, "Error allocating converted audio AVFrame.\n");
-                        return;
-                    }
-
-                    convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
-                    convertedAudioFrame->format = AV_SAMPLE_FMT_FLT;
-                    convertedAudioFrame->sample_rate = audioCodecContext->sample_rate;
-                    convertedAudioFrame->nb_samples = audio_frame->nb_samples;
-
-                    if (av_frame_get_buffer(convertedAudioFrame, 0) < 0) {
-                        fprintf(stderr, "Error allocating converted frame buffer.\n");
-                        av_frame_free(&convertedAudioFrame);
-                        break;
-                    }
-
-                    swr_convert_frame(swrAudioContext, convertedAudioFrame, audio_frame);
-
-                    if(m_ioAudioDevice)
-                        m_ioAudioDevice->write(reinterpret_cast<char*>(convertedAudioFrame->data[0]), convertedAudioFrame->linesize[0]);
-
-//                    if(m_ioAudioDevice)
-//                        m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0]), audio_frame->linesize[0]);
-                }
-                av_frame_unref(audio_frame);
-            }
-            // for preview
-            else if (packet->stream_index == video_idx)
-            {
-                int ret = avcodec_send_packet(videoCodecContext, packet);
-                if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    std::cout << "video avcodec_send_packet: " << ret << std::endl;
-                    break;
-                }
-                while (ret  >= 0) {
-                    ret = avcodec_receive_frame(videoCodecContext, video_frame);
-                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                        //std::cout << "video avcodec_receive_frame: " << ret << std::endl;
-                        break;
-                    }
-
-                    SwsContext* swsContext = sws_getContext(video_frame->width, video_frame->height, videoCodecContext->pix_fmt,
-                                                            video_frame->width, video_frame->height, AV_PIX_FMT_RGB32,
-                                                            SWS_BILINEAR, nullptr, nullptr, nullptr);
-                    if (!swsContext) {
-                        std::cout << "Failed to create SwsContext" << std::endl;
-                        break;
-                    }
-
-                    // Initialize the SwsContext
-                    auto ret = sws_init_context(swsContext, nullptr, nullptr);
-                    if (ret < 0) {
-                        std::cout << "Failed to init SwsContext" << std::endl;
-                        break;
-                    }
-
-                    uint8_t* destData[1] = { nullptr };
-                    int destLinesize[1] = { 0 };
-
-                    QImage image(video_frame->width, video_frame->height, QImage::Format_RGB32);
-
-                    destData[0] = image.bits();
-                    destLinesize[0] = image.bytesPerLine();
-
-                    sws_scale(swsContext, video_frame->data, video_frame->linesize, 0, video_frame->height, destData, destLinesize);
-                    emit sendFrame(image);
-
-                    // Cleanup
-                    sws_freeContext(swsContext);
-                    av_frame_unref(video_frame);
-                }
-            }
+            packet->pos = -1;           
 
             av_interleaved_write_frame(outputContext, packet);
-
         }
         av_packet_unref(packet);
     }
