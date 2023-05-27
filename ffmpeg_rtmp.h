@@ -1,20 +1,22 @@
 #ifndef FFMPEG_RTMP_H
 #define FFMPEG_RTMP_H
 
-#include <QDebug>
-#include <QThread>
-#include <QNetworkInterface>
-#include <QImage>
-#include <QMediaDevices>
-#include <QAudioSink>
-#include <QScopedPointer>
-
 #include <stdio.h>
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+
+#include <QDebug>
+#include <QThread>
+#include <QNetworkInterface>
+#include <QImage>
+#include <QWidget>
+#include <QMediaDevices>
+#include <QAudioSink>
+#include <QMediaMetaData>
+
 
 #ifdef _WIN32
 //Windows
@@ -56,7 +58,6 @@ extern "C"
 #endif
 #endif
 
-
 class ffmpeg_rtmp : public QThread
 {
     Q_OBJECT
@@ -91,7 +92,7 @@ private:
     QString in_filename, out_filename;
     QString info;
     QIODevice *m_ioAudioDevice{nullptr};   
-    QScopedPointer<QAudioSink> m_audioOutput{};
+    QScopedPointer<QAudioSink> m_audioSinkOutput{nullptr};
 
 protected:
     void run();
