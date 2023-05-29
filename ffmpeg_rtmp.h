@@ -69,6 +69,8 @@ private:
     int prepare_ffmpeg();
     int start_audio_device();
     int set_parameters();
+    int init_swr_context(AVSampleFormat out_format);
+    AVFrame* convert_audio_frame(AVSampleFormat out_format);
     void start_streamer();
 
     bool m_stop {false};
@@ -84,8 +86,8 @@ private:
     AVStream *inputStream{nullptr};
     AVStream *outputStream{nullptr};
     AVStream *vid_stream{nullptr};
-    AVStream *aud_stream{nullptr};
-//    SwrContext* swrAudioContext{nullptr};
+    AVStream *aud_stream{nullptr};    
+    SwrContext* swrAudioContext{nullptr};
 
     int video_idx = -1;
     int audio_idx = -1;

@@ -178,19 +178,20 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 
 int ffmpeg_rtmp::start_audio_device()
 {
-    QAudioFormat format;
-    format.setChannelCount(audioCodecContext->ch_layout.nb_channels);
-    format.setSampleRate(audioCodecContext->sample_rate);
-    format.setSampleFormat(QAudioFormat::Float);
-    format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
-
-    qDebug() << format.sampleRate() << format.channelCount() << format.sampleFormat();
-
     QAudioDevice deviceInfo(QMediaDevices::defaultAudioOutput());
+    QAudioFormat format = deviceInfo.preferredFormat();
+
     if (!deviceInfo.isFormatSupported(format)) {
         qWarning() << "Raw audio format not supported by backend, cannot play audio.";
         return false;
     }
+
+    format.setChannelCount(audioCodecContext->ch_layout.nb_channels);
+    format.setSampleRate(audioCodecContext->sample_rate);
+    format.setSampleFormat(QAudioFormat::Int16);
+    format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
+
+    qDebug() << format.sampleRate() << format.channelCount() << format.sampleFormat();
 
     m_audioSinkOutput.reset(new QAudioSink(deviceInfo, format));
 
@@ -253,6 +254,52 @@ int ffmpeg_rtmp::set_parameters()
     return true;
 }
 
+int ffmpeg_rtmp::init_swr_context(AVSampleFormat out_format)
+{
+
+    swrAudioContext = swr_alloc();
+    if (!swrAudioContext) {
+        fprintf(stderr, "Error allocating SwrContext.\n");
+        return false;
+    }
+
+    av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
+    av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
+    av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
+    av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
+    av_opt_set_sample_fmt(swrAudioContext, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
+    av_opt_set_sample_fmt(swrAudioContext, "out_sample_fmt", out_format, 0);
+
+    if (swr_init(swrAudioContext) < 0) {
+        fprintf(stderr, "Error initializing SwrContext.\n");
+        return false;
+    }
+
+    return true;
+}
+
+AVFrame* ffmpeg_rtmp::convert_audio_frame(AVSampleFormat out_format)
+{
+    AVFrame* convertedAudioFrame = av_frame_alloc();
+    if (!convertedAudioFrame) {
+        fprintf(stderr, "Error allocating converted audio AVFrame.\n");
+        return NULL;
+    }
+
+    convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
+    convertedAudioFrame->format = out_format;
+    convertedAudioFrame->sample_rate = audioCodecContext->sample_rate;
+    convertedAudioFrame->nb_samples = audio_frame->nb_samples;
+
+    if (av_frame_get_buffer(convertedAudioFrame, 0) < 0) {
+        fprintf(stderr, "Error allocating converted frame buffer.\n");
+        av_frame_free(&convertedAudioFrame);
+        return NULL;
+    }
+    swr_convert_frame(swrAudioContext, convertedAudioFrame, audio_frame);
+    return convertedAudioFrame;
+}
+
 void ffmpeg_rtmp::start_streamer()
 {
     if (!prepare_ffmpeg())
@@ -281,35 +328,10 @@ void ffmpeg_rtmp::start_streamer()
         return;
     }
 
-    emit sendConnectionStatus(true);    
-
-    AVFrame* convertedAudioFrame = av_frame_alloc();
-    if (!convertedAudioFrame) {
-        fprintf(stderr, "Error allocating converted audio AVFrame.\n");
-        return;
-    }
-
-    SwrContext* swrAudioContext = swr_alloc();
-    if (!swrAudioContext) {
-        fprintf(stderr, "Error allocating SwrContext.\n");
-        return;
-    }
-
-    av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
-    av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
-    av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
-    av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
-    av_opt_set_sample_fmt(swrAudioContext, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
-    av_opt_set_sample_fmt(swrAudioContext, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
-
-    if (swr_init(swrAudioContext) < 0) {
-        fprintf(stderr, "Error initializing SwrContext.\n");
-        return;
-    }
+    emit sendConnectionStatus(true);
 
     // Read packets from the input stream and write to the output file
     AVPacket* packet = av_packet_alloc();
-    int got_packet;
 
     while (!m_stop)
     {
@@ -325,16 +347,9 @@ void ffmpeg_rtmp::start_streamer()
 
         if (packet->stream_index >= 0 && (unsigned int)packet->stream_index < inputContext->nb_streams)
         {
-            // Rescale packet timestamps
-            packet->pts = av_rescale_q(packet->pts, inputStream->time_base, outputStream->time_base);
-            packet->dts = av_rescale_q(packet->dts, inputStream->time_base, outputStream->time_base);
-            packet->duration = av_rescale_q(packet->duration, inputStream->time_base, outputStream->time_base);
-            packet->pos = -1;
 
             if (packet->stream_index == audio_idx)
             {
-                // QByteArray audioData(reinterpret_cast<const char*>(packet->data), packet->size);
-                // m_ioAudioDevice->write(audioData);
                 int ret = avcodec_send_packet(audioCodecContext, packet);
                 if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
                     std::cout << "audio avcodec_send_packet: " << ret << std::endl;
@@ -347,24 +362,37 @@ void ffmpeg_rtmp::start_streamer()
                         break;
                     }
 
-                    convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
-                    convertedAudioFrame->format = AV_SAMPLE_FMT_FLT;
-                    convertedAudioFrame->sample_rate = audioCodecContext->sample_rate;
-                    convertedAudioFrame->nb_samples = audio_frame->nb_samples;
-
-                    if (av_frame_get_buffer(convertedAudioFrame, 0) < 0) {
-                        fprintf(stderr, "Error allocating converted frame buffer.\n");
-                        av_frame_free(&convertedAudioFrame);
-                        break;
-                    }
-                    swr_convert_frame(swrAudioContext, convertedAudioFrame, audio_frame);
-
-
-
-                    //printAudioFrameInfo(audioCodecContext, convertedAudioFrame);
                     if(m_ioAudioDevice)
-                        m_ioAudioDevice->write(reinterpret_cast<char*>(convertedAudioFrame->data[0] ), convertedAudioFrame->linesize[0]);
+                    {
+                        if(av_sample_fmt_is_planar(audioCodecContext->sample_fmt) == 1)
+                        {
+                            // Calculate the total number of samples in the frame
+                            int numSamples = audio_frame->linesize[0] / sizeof(float);
 
+                            // Allocate memory for the PCM 16-bit frame
+                            int16_t* pcm16Frame = new int16_t[numSamples];
+
+                            // Convert planar float frame to float frame
+                            const float* planarFloatData = reinterpret_cast<const float*>(audio_frame->data[0]);
+
+                            for (int i = 0; i < numSamples; i++) {
+                                // Scale the float sample to the range of int16_t (-32768 to 32767)
+                                float scaledSample = planarFloatData[i] * 32767.0f;
+                                // Clamp the sample value to the valid range of int16_t
+                                pcm16Frame[i] = std::clamp<int16_t>(static_cast<int16_t>(scaledSample), -32768, 32767);
+                            }
+
+                            // Write the PCM 16-bit frame to m_ioAudioDevice
+                            m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame), numSamples * sizeof(int16_t));
+
+                            // Don't forget to clean up the allocated memory
+                            delete[] pcm16Frame;
+                        }
+                        else
+                        {
+                            m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0] ), audio_frame->linesize[0]);
+                        }
+                    }
                 }
                 av_frame_unref(audio_frame);
             }
@@ -414,6 +442,12 @@ void ffmpeg_rtmp::start_streamer()
                     av_frame_unref(video_frame);
                 }
             }
+
+            // Rescale packet timestamps
+            packet->pts = av_rescale_q(packet->pts, inputStream->time_base, outputStream->time_base);
+            packet->dts = av_rescale_q(packet->dts, inputStream->time_base, outputStream->time_base);
+            packet->duration = av_rescale_q(packet->duration, inputStream->time_base, outputStream->time_base);
+            packet->pos = -1;
 
             int ret = av_interleaved_write_frame(outputContext, packet);
             if (ret < 0) {
