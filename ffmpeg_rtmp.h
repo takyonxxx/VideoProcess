@@ -7,6 +7,8 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <cstdint>
+#include <algorithm>
 
 #include <QDebug>
 #include <QThread>

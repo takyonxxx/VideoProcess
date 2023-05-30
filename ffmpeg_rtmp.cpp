@@ -406,9 +406,9 @@ void ffmpeg_rtmp::start_streamer()
                                 bytesRemaining -= bytesWritten;
 
                                 if (bytesRemaining > 0) {
-                                    //m_ioAudioDevice->waitForBytesWritten(-1);
+                                    m_ioAudioDevice->waitForBytesWritten(-1);
                                     // Alternatively, you can specify a timeout value:
-                                    m_ioAudioDevice->waitForBytesWritten(10);
+                                    //m_ioAudioDevice->waitForBytesWritten(10);
                                 }
                             }
 
