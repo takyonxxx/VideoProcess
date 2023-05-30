@@ -194,6 +194,9 @@ int ffmpeg_rtmp::start_audio_device()
     qDebug() << format.sampleRate() << format.channelCount() << format.sampleFormat();
 
     m_audioSinkOutput.reset(new QAudioSink(deviceInfo, format));
+    int bufferSize = 4096; // Set your desired buffer size in bytes
+
+    m_audioSinkOutput->setBufferSize(bufferSize);
 
     m_ioAudioDevice = m_audioSinkOutput->start();
 
@@ -376,14 +379,38 @@ void ffmpeg_rtmp::start_streamer()
                             const float* planarFloatData = reinterpret_cast<const float*>(audio_frame->data[0]);
 
                             for (int i = 0; i < numSamples; i++) {
+
                                 // Scale the float sample to the range of int16_t (-32768 to 32767)
                                 float scaledSample = planarFloatData[i] * 32767.0f;
+
                                 // Clamp the sample value to the valid range of int16_t
-                                pcm16Frame[i] = std::clamp<int16_t>(static_cast<int16_t>(scaledSample), -32768, 32767);
+                                scaledSample = std::clamp<float>(scaledSample, -32768.0f, 32767.0f);
+
+                                // Convert to int16_t with rounding
+                                pcm16Frame[i] = static_cast<int16_t>(scaledSample + 0.5f);
                             }
 
                             // Write the PCM 16-bit frame to m_ioAudioDevice
-                            m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame), numSamples * sizeof(int16_t));
+                            int bytesToWrite = numSamples * sizeof(int16_t);
+                            int bytesRemaining = bytesToWrite;
+                            int totalBytesWritten = 0;
+
+                            while (bytesRemaining > 0) {
+                                int bytesWritten = m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame) + totalBytesWritten, bytesRemaining);
+                                if (bytesWritten == -1) {
+                                    // Handle error
+                                    break;
+                                }
+
+                                totalBytesWritten += bytesWritten;
+                                bytesRemaining -= bytesWritten;
+
+                                if (bytesRemaining > 0) {
+                                    //m_ioAudioDevice->waitForBytesWritten(-1);
+                                    // Alternatively, you can specify a timeout value:
+                                    m_ioAudioDevice->waitForBytesWritten(10);
+                                }
+                            }
 
                             // Don't forget to clean up the allocated memory
                             delete[] pcm16Frame;
