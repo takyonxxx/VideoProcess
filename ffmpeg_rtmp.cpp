@@ -15,12 +15,21 @@ void printAudioFrameInfo(const AVCodecContext* codecContext, const AVFrame* fram
 {
     // See the following to know what data type (unsigned char, short, float, etc) to use to access the audio data:
     // http://ffmpeg.org/doxygen/trunk/samplefmt_8h.html#af9a51ca15301871723577c730b5865c5
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+    std::cout << "Audio frame info:\n"
+              << "  Sample count: " << frame->nb_samples << '\n'
+              << "  Channel count: " << codecContext->channels << '\n'
+              << "  Format: " << av_get_sample_fmt_name(codecContext->sample_fmt) << '\n'
+              << "  Bytes per sample: " << av_get_bytes_per_sample(codecContext->sample_fmt) << '\n'
+              << "  Is planar? " << av_sample_fmt_is_planar(codecContext->sample_fmt) << '\n';
+#else
     std::cout << "Audio frame info:\n"
               << "  Sample count: " << frame->nb_samples << '\n'
               << "  Channel count: " << codecContext->ch_layout.nb_channels << '\n'
               << "  Format: " << av_get_sample_fmt_name(codecContext->sample_fmt) << '\n'
               << "  Bytes per sample: " << av_get_bytes_per_sample(codecContext->sample_fmt) << '\n'
               << "  Is planar? " << av_sample_fmt_is_planar(codecContext->sample_fmt) << '\n';
+#endif
 }
 
 
@@ -185,8 +194,11 @@ int ffmpeg_rtmp::start_audio_device()
         qWarning() << "Raw audio format not supported by backend, cannot play audio.";
         return false;
     }
-
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+    format.setChannelCount(audioCodecContext->channels);
+#else
     format.setChannelCount(audioCodecContext->ch_layout.nb_channels);
+#endif
     format.setSampleRate(audioCodecContext->sample_rate);
     format.setSampleFormat(QAudioFormat::Int16);
     format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
@@ -251,7 +263,11 @@ int ffmpeg_rtmp::set_parameters()
 
     info = "Audio Codec: " + QString(codecAudioName) + " sr: " + QString::number(codecAudioParams->sample_rate);
     emit sendInfo(info);
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+    info = "Audio Format: " + QString(av_get_sample_fmt_name(audioCodecContext->sample_fmt)) + " Channels: " + QString::number(codecAudioParams->channels);
+#else
     info = "Audio Format: " + QString(av_get_sample_fmt_name(audioCodecContext->sample_fmt)) + " Channels: " + QString::number(codecAudioParams->ch_layout.nb_channels);
+#endif
     emit sendInfo(info);
 
     return true;
@@ -266,8 +282,13 @@ int ffmpeg_rtmp::init_swr_context(AVSampleFormat out_format)
         return false;
     }
 
-    av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
-    av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+    av_opt_set_channel_layout(swrAudioContext, "in_channel_layout", audioCodecContext->channel_layout, 0);
+    av_opt_set_channel_layout(swrAudioContext, "out_channel_layout", audioCodecContext->channel_layout, 0);
+#else
+    av_opt_set_channel_layout(swrAudioContext, "in_channel_layout", audioCodecContext->ch_layout, 0);
+    av_opt_set_channel_layout(swrAudioContext, "out_channel_layout", audioCodecContext->ch_layout, 0);
+#endif
     av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
     av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
     av_opt_set_sample_fmt(swrAudioContext, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
@@ -289,7 +310,11 @@ AVFrame* ffmpeg_rtmp::convert_audio_frame(AVSampleFormat out_format)
         return NULL;
     }
 
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+    convertedAudioFrame->channel_layout = audioCodecContext->channel_layout;
+#else
     convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
+#endif
     convertedAudioFrame->format = out_format;
     convertedAudioFrame->sample_rate = audioCodecContext->sample_rate;
     convertedAudioFrame->nb_samples = audio_frame->nb_samples;
@@ -358,16 +383,16 @@ void ffmpeg_rtmp::start_streamer()
                     std::cout << "audio avcodec_send_packet: " << ret << std::endl;
                     break;
                 }
-                while (ret  >= 0) {
+
+                while (ret >= 0) {
                     ret = avcodec_receive_frame(audioCodecContext, audio_frame);
                     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                        //std::cout << "audio avcodec_receive_frame: " << ret << std::endl;
                         break;
                     }
 
-                    if(m_ioAudioDevice)
+                    if (m_ioAudioDevice)
                     {
-                        if(av_sample_fmt_is_planar(audioCodecContext->sample_fmt) == 1)
+                        if (av_sample_fmt_is_planar(audioCodecContext->sample_fmt) == 1)
                         {
                             // Calculate the total number of samples in the frame
                             int numSamples = audio_frame->linesize[0] / sizeof(float);
@@ -391,37 +416,20 @@ void ffmpeg_rtmp::start_streamer()
                             }
 
                             // Write the PCM 16-bit frame to m_ioAudioDevice
-                            int bytesToWrite = numSamples * sizeof(int16_t);
-                            int bytesRemaining = bytesToWrite;
-                            int totalBytesWritten = 0;
+                            int bytesToWrite = numSamples * audio_frame->channels * sizeof(int16_t);
+                            m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame), bytesToWrite);
 
-                            while (bytesRemaining > 0) {
-                                int bytesWritten = m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame) + totalBytesWritten, bytesRemaining);
-                                if (bytesWritten == -1) {
-                                    // Handle error
-                                    break;
-                                }
-
-                                totalBytesWritten += bytesWritten;
-                                bytesRemaining -= bytesWritten;
-
-                                if (bytesRemaining > 0) {
-                                    m_ioAudioDevice->waitForBytesWritten(-1);
-                                    // Alternatively, you can specify a timeout value:
-                                    //m_ioAudioDevice->waitForBytesWritten(10);
-                                }
-                            }
-
-                            // Don't forget to clean up the allocated memory
+                            // Clean up the allocated memory
                             delete[] pcm16Frame;
                         }
                         else
                         {
-                            m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0] ), audio_frame->linesize[0]);
+                            m_ioAudioDevice->write(reinterpret_cast<char*>(audio_frame->data[0]), audio_frame->linesize[0]);
                         }
                     }
+
+                    av_frame_unref(audio_frame);
                 }
-                av_frame_unref(audio_frame);
             }
             // for preview
             else if (packet->stream_index == video_idx)
