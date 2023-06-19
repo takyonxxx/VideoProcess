@@ -1,6 +1,9 @@
 #include "ffmpeg_rtmp.h"
 #include <QStandardPaths>
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
+
 void ffmpegLogCallback(void *avcl, int level, const char *fmt, va_list vl)
 {
     if (level <= av_log_get_level()) // Only log messages with a level equal to or higher than the current FFmpeg log level
@@ -15,7 +18,7 @@ void printAudioFrameInfo(const AVCodecContext* codecContext, const AVFrame* fram
 {
     // See the following to know what data type (unsigned char, short, float, etc) to use to access the audio data:
     // http://ffmpeg.org/doxygen/trunk/samplefmt_8h.html#af9a51ca15301871723577c730b5865c5
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(57, 0, 0)
     std::cout << "Audio frame info:\n"
               << "  Sample count: " << frame->nb_samples << '\n'
               << "  Channel count: " << codecContext->channels << '\n'
@@ -42,7 +45,8 @@ ffmpeg_rtmp::ffmpeg_rtmp(QObject *parent)
     //tTM/2!**
 
     const char* ffmpegVersion = av_version_info();
-    std::cout << "FFmpeg version: " << ffmpegVersion << std::endl;
+    std::string avutil_verison = XSTR(LIBAVUTIL_VERSION);
+    std::cout << "FFmpeg version: " << ffmpegVersion << " avutil_verison : " << avutil_verison << std::endl;
 
     out_filename = QString("%1/output.mp4").arg(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
     avformat_network_init();
@@ -194,7 +198,7 @@ int ffmpeg_rtmp::start_audio_device()
         qWarning() << "Raw audio format not supported by backend, cannot play audio.";
         return false;
     }
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(57, 0, 0)
     format.setChannelCount(audioCodecContext->channels);
 #else
     format.setChannelCount(audioCodecContext->ch_layout.nb_channels);
@@ -263,7 +267,7 @@ int ffmpeg_rtmp::set_parameters()
 
     info = "Audio Codec: " + QString(codecAudioName) + " sr: " + QString::number(codecAudioParams->sample_rate);
     emit sendInfo(info);
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(57, 0, 0)
     info = "Audio Format: " + QString(av_get_sample_fmt_name(audioCodecContext->sample_fmt)) + " Channels: " + QString::number(codecAudioParams->channels);
 #else
     info = "Audio Format: " + QString(av_get_sample_fmt_name(audioCodecContext->sample_fmt)) + " Channels: " + QString::number(codecAudioParams->ch_layout.nb_channels);
@@ -282,12 +286,12 @@ int ffmpeg_rtmp::init_swr_context(AVSampleFormat out_format)
         return false;
     }
 
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(57, 0, 0)
     av_opt_set_channel_layout(swrAudioContext, "in_channel_layout", audioCodecContext->channel_layout, 0);
     av_opt_set_channel_layout(swrAudioContext, "out_channel_layout", audioCodecContext->channel_layout, 0);
 #else
-    av_opt_set_channel_layout(swrAudioContext, "in_channel_layout", audioCodecContext->ch_layout, 0);
-    av_opt_set_channel_layout(swrAudioContext, "out_channel_layout", audioCodecContext->ch_layout, 0);
+    av_opt_set_chlayout(swrAudioContext, "in_channel_layout", &audioCodecContext->ch_layout, 0);
+    av_opt_set_chlayout(swrAudioContext, "out_channel_layout", &audioCodecContext->ch_layout, 0);
 #endif
     av_opt_set_int(swrAudioContext, "in_sample_rate", audioCodecContext->sample_rate, 0);
     av_opt_set_int(swrAudioContext, "out_sample_rate", audioCodecContext->sample_rate, 0);
@@ -310,7 +314,7 @@ AVFrame* ffmpeg_rtmp::convert_audio_frame(AVSampleFormat out_format)
         return NULL;
     }
 
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 0, 0)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(57, 0, 0)
     convertedAudioFrame->channel_layout = audioCodecContext->channel_layout;
 #else
     convertedAudioFrame->ch_layout = audioCodecContext->ch_layout;
@@ -395,29 +399,45 @@ void ffmpeg_rtmp::start_streamer()
                         if (av_sample_fmt_is_planar(audioCodecContext->sample_fmt) == 1)
                         {
                             // Calculate the total number of samples in the frame
-                            int numSamples = audio_frame->linesize[0] / sizeof(float);
+                            int numSamples = audio_frame->nb_samples;
+                            int channels = audioCodecContext->channels;
 
                             // Allocate memory for the PCM 16-bit frame
-                            int16_t* pcm16Frame = new int16_t[numSamples];
+                            int16_t* pcm16Frame = new int16_t[numSamples * channels];
+                            auto f_contstant = 32767.0f;
 
-                            // Convert planar float frame to float frame
-                            const float* planarFloatData = reinterpret_cast<const float*>(audio_frame->data[0]);
+                            // Convert planar float frame to PCM 16-bit frame
+                            for (int i = 0; i < numSamples; ++i)
+                            {
+                                const float* const* planarFloatData = reinterpret_cast<const float* const*>(audio_frame->extended_data);
 
-                            for (int i = 0; i < numSamples; i++) {
+                                for (int channel = 0; channel < channels; ++channel)
+                                {
+                                    // Scale the float sample to the range of int16_t (-32768 to 32767)
+                                    float scaledSample = planarFloatData[channel][i] * f_contstant;
 
-                                // Scale the float sample to the range of int16_t (-32768 to 32767)
-                                float scaledSample = planarFloatData[i] * 32767.0f;
+                                    // Clamp the sample value to the valid range of int16_t
+                                    scaledSample = std::clamp<float>(scaledSample, -1 * f_contstant, f_contstant);
 
-                                // Clamp the sample value to the valid range of int16_t
-                                scaledSample = std::clamp<float>(scaledSample, -32768.0f, 32767.0f);
-
-                                // Convert to int16_t with rounding
-                                pcm16Frame[i] = static_cast<int16_t>(scaledSample + 0.5f);
+                                    // Convert to int16_t with rounding
+                                    pcm16Frame[i * channels + channel] = static_cast<int16_t>(scaledSample + 0.5f);
+                                }
                             }
 
+                            int bytesToWrite = numSamples * channels * sizeof(int16_t);
+
                             // Write the PCM 16-bit frame to m_ioAudioDevice
-                            int bytesToWrite = numSamples * audio_frame->channels * sizeof(int16_t);
-                            m_ioAudioDevice->write(reinterpret_cast<char*>(pcm16Frame), bytesToWrite);
+                            const char* pcm16FramePtr = reinterpret_cast<const char*>(pcm16Frame);
+                            qint64 totalBytesWritten = 0;
+
+                            while (totalBytesWritten < bytesToWrite) {
+                                qint64 bytesWritten = m_ioAudioDevice->write(pcm16FramePtr + totalBytesWritten, bytesToWrite - totalBytesWritten);
+                                if (bytesWritten == -1) {
+                                    // Handle the error case
+                                    break;
+                                }
+                                totalBytesWritten += bytesWritten;
+                            }
 
                             // Clean up the allocated memory
                             delete[] pcm16Frame;
