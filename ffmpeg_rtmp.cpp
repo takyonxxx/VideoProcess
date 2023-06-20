@@ -428,6 +428,7 @@ void ffmpeg_rtmp::start_streamer()
 
                             // Write the PCM 16-bit frame to m_ioAudioDevice
                             const char* pcm16FramePtr = reinterpret_cast<const char*>(pcm16Frame);
+//                            m_ioAudioDevice->write(pcm16FramePtr, bytesToWrite);
                             qint64 totalBytesWritten = 0;
 
                             while (totalBytesWritten < bytesToWrite) {
