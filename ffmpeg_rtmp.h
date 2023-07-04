@@ -67,9 +67,10 @@ public:
     explicit ffmpeg_rtmp(QObject *parent = nullptr);
     void stop();
     void setUrl();
+    int set_audio_device(QAudioDevice&);
 private:
     int prepare_ffmpeg();
-    int start_audio_device();
+    int start_audio_device();    
     int set_parameters();
     int init_swr_context(AVSampleFormat out_format);
     AVFrame* convert_audio_frame(AVSampleFormat out_format);

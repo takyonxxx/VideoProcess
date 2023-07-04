@@ -33,6 +33,16 @@ Camera::Camera()
     ui->pushExit->setStyleSheet("font-size: 12pt; font-weight: bold; color: white;background-color:#154360; padding: 3px; spacing: 3px;");
     ui->labelRtmpUrl->setStyleSheet("font-size: 14pt; font-weight: bold; color: #ECF0F1;background-color: #2E4053;   padding: 6px; spacing: 6px;");
     ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
+    //    ui->audioOutputDeviceBox->setStyleSheet("font-size: 10pt; font-weight: bold; color: white;background-color:orange; padding: 6px; spacing: 6px;");
+    connect(ui->audioOutputDeviceBox, QOverload<int>::of(&QComboBox::activated), this, &Camera::outputDeviceChanged);
+    connect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
+
+    ui->graphicsView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    for (auto &device: QMediaDevices::audioOutputs()) {
+        auto name = device.description();
+        ui->audioOutputDeviceBox->addItem(name, QVariant::fromValue(device));
+    }
 
     m_audioInput.reset(new QAudioInput);
     m_captureSession.setAudioInput(m_audioInput.get());
@@ -64,6 +74,30 @@ Camera::Camera()
     view->setScene(scene);
     setCamera(QMediaDevices::defaultVideoInput());
 }
+
+
+void Camera::resizeEvent(QResizeEvent *event)
+{
+    int width = event->size().width();
+    int height = width * 9 / 16; // Calculate height based on 16:9 aspect ratio
+    qDebug() << width << height;
+    // Temporarily disconnect resizeEvent signal
+    disconnect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
+
+    ui->graphicsView->setFixedSize(2 * width, height);
+
+    // Reconnect resizeEvent signal
+    connect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
+}
+
+
+
+void Camera::outputDeviceChanged(int index)
+{
+    QAudioDevice ouputDevice = ui->audioOutputDeviceBox->itemData(index).value<QAudioDevice>();
+    m_ffmpeg_rtmp->set_audio_device(ouputDevice);
+}
+
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
 {
@@ -155,7 +189,7 @@ void Camera::keyReleaseEvent(QKeyEvent *event)
 void Camera::updateRecordTime()
 {
     QString str = QString("Recorded %1 sec").arg(m_mediaRecorder->duration()/1000);
-//    ui->statusbar->showMessage(str);
+    //    ui->statusbar->showMessage(str);
 }
 
 void Camera::processCapturedImage(int requestId, const QImage& img)
@@ -317,7 +351,7 @@ void Camera::readyForCapture(bool ready)
 void Camera::imageSaved(int id, const QString &fileName)
 {
     Q_UNUSED(id);
-//    ui->statusbar->showMessage(tr("Captured \"%1\"").arg(QDir::toNativeSeparators(fileName)));
+    //    ui->statusbar->showMessage(tr("Captured \"%1\"").arg(QDir::toNativeSeparators(fileName)));
 
     m_isCapturingImage = false;
     if (m_applicationExiting)

@@ -83,11 +83,14 @@ private slots:
 
     void on_pushStream_clicked();
     void on_pushExit_clicked();
+    void outputDeviceChanged(int index);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void handleResizeEvent(QResizeEvent* event);
 
 private:
     Ui::Camera *ui;
@@ -107,6 +110,7 @@ private:
     bool m_isCapturingImage = false;
     bool m_applicationExiting = false;
     bool m_doImageCapture = true;
+    bool resizing = false;
 
     MetaDataDialog *m_metaDataDialog = nullptr;
 };

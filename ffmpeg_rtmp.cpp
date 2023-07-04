@@ -228,6 +228,12 @@ int ffmpeg_rtmp::start_audio_device()
     return true;
 }
 
+int ffmpeg_rtmp::set_audio_device(QAudioDevice &audio_device)
+{
+    qDebug() << audio_device.description();
+    return -1;
+}
+
 int ffmpeg_rtmp::set_parameters()
 {
     int videoWidth = 0;
