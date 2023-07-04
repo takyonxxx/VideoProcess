@@ -119,13 +119,13 @@ void Camera::initSpectrumGraph()
     ui->Plotter->setFftRange(-140.0f, 20.0f);
 
     ui->Plotter->setFreqUnits(1000);
-    ui->Plotter->setPercent2DScreen(50);
+    ui->Plotter->setPercent2DScreen(75);
     ui->Plotter->setFreqDigits(1);
     ui->Plotter->setFilterBoxEnabled(true);
     ui->Plotter->setCenterLineEnabled(true);
     ui->Plotter->setBookmarksEnabled(true);
-    ui->Plotter->setVdivDelta(40);
-    ui->Plotter->setHdivDelta(40);
+    ui->Plotter->setVdivDelta(50);
+    ui->Plotter->setHdivDelta(50);
     ui->Plotter->setFftPlotColor(Qt::green);
     ui->Plotter->setFftFill(true);
 
@@ -180,8 +180,10 @@ void Camera::runFFTW(float *buffer, int fftsize)
             pwr  = sqrt(out[i][REAL] * out[i][REAL] + out[i][IMAG] * out[i][IMAG]);
             lpwr = 15.f * log10f(pwr_scale * pwr);
 
-            if(d_realFftData[i] < lpwr) d_realFftData[i] = lpwr; else d_realFftData[i] -= (d_realFftData[i] - lpwr) / 5.f;
-            d_iirFftData[i] += d_fftAvg * (d_realFftData[i] - d_iirFftData[i]);
+            if(d_realFftData[i] < lpwr)
+                d_realFftData[i] = lpwr;
+            else d_realFftData[i] -= (d_realFftData[i] - lpwr) / 5.f;
+                d_iirFftData[i] += d_fftAvg * (d_realFftData[i] - d_iirFftData[i]);
         }
         emit spectValueChanged(fftsize);
     }
