@@ -83,11 +83,11 @@ int ffmpeg_rtmp::prepare_ffmpeg()
 {
     // Open the RTMP stream
     AVDictionary *format_opts = NULL;
-    av_dict_set(&format_opts, "timeout", "10", 0);
+    av_dict_set(&format_opts, "timeout", "30", 0);
 
     if (avformat_open_input(&inputContext, in_filename.toStdString().c_str() , nullptr, &format_opts) != 0) {
         // Error handling
-        qDebug() << "error avformat_open_input";
+        qDebug() << "timeout, avformat_open_input";
         return false;
     }
 
@@ -340,10 +340,10 @@ AVFrame* ffmpeg_rtmp::convert_audio_frame(AVSampleFormat out_format)
 
 void ffmpeg_rtmp::start_streamer()
 {
-    if (!prepare_ffmpeg())
+    while (!prepare_ffmpeg())
     {
-        emit sendConnectionStatus(false);
-        return;
+//        emit sendConnectionStatus(false);
+        QThread::msleep(100);
     }
 
     if (!start_audio_device())
@@ -376,7 +376,8 @@ void ffmpeg_rtmp::start_streamer()
         int ret = av_read_frame(inputContext, packet);
         if(ret < 0)
         {
-            std::cout << "there is no packet!" << ret << std::endl;
+            std::cout << "av_read_frame : no packet!" << std::endl;
+            m_stop = true;
             break;
         }
 
@@ -541,12 +542,17 @@ void ffmpeg_rtmp::start_streamer()
     if (outputContext && !(outputContext->oformat->flags & AVFMT_NOFILE))
         avio_close(outputContext->pb);
     avformat_free_context(outputContext);
+
+    if (m_stop)
+    {
+        run();
+    }
+
 }
 
 void ffmpeg_rtmp::run()
 {
     m_stop = false;
-
-    emit sendInfo("Trying to start Rtmp stream server.");
+    emit sendInfo("Rtmp stream server is listening.");
     start_streamer();
 }
