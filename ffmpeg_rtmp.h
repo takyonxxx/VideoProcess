@@ -106,7 +106,8 @@ signals:
     void sendInfo(QString);
     void sendUrl(QString);
     void sendConnectionStatus(bool);
-    void sendFrame(QImage);
+    void sendVideoFrame(QImage);
+    void sendAudioFrame(const char*, int);
 
 };
 

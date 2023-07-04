@@ -434,7 +434,8 @@ void ffmpeg_rtmp::start_streamer()
 
                             // Write the PCM 16-bit frame to m_ioAudioDevice
                             const char* pcm16FramePtr = reinterpret_cast<const char*>(pcm16Frame);
-//                            m_ioAudioDevice->write(pcm16FramePtr, bytesToWrite);
+                            emit sendAudioFrame(pcm16FramePtr, bytesToWrite);
+
                             qint64 totalBytesWritten = 0;
 
                             while (totalBytesWritten < bytesToWrite) {
@@ -497,7 +498,7 @@ void ffmpeg_rtmp::start_streamer()
                     destLinesize[0] = image.bytesPerLine();
 
                     sws_scale(swsContext, video_frame->data, video_frame->linesize, 0, video_frame->height, destData, destLinesize);
-                    emit sendFrame(image);
+                    emit sendVideoFrame(image);
 
                     // Cleanup
                     sws_freeContext(swsContext);

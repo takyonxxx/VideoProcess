@@ -4,6 +4,7 @@ TARGET = video_process_ai
 QT += multimedia multimediawidgets widgets network
 
 HEADERS = \
+    Plotter.h \
     camera.h \
     ffmpeg_rtmp.h \
     imagesettings.h \
@@ -11,6 +12,7 @@ HEADERS = \
     metadatadialog.h
 
 SOURCES = \
+    Plotter.cpp \
     main.cpp \
     ffmpeg_rtmp.cpp \
     camera.cpp \
@@ -50,7 +52,9 @@ unix:!macx {
 unix:macx {
     message("macx enabled")
     INCLUDEPATH += /opt/homebrew/Cellar/ffmpeg/6.0/include
+    INCLUDEPATH += /opt/homebrew/Cellar/fftw/3.3.10_1/include
     LIBS += -L/opt/homebrew/Cellar/ffmpeg/6.0/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
+    LIBS += -L/opt/homebrew/Cellar/fftw/3.3.10_1/lib -lfftw3
 }
 
 RESOURCES += camera.qrc

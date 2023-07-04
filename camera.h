@@ -15,12 +15,19 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QTimer>
+#include <fftw3.h>
 #include "ffmpeg_rtmp.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Camera; }
 class QActionGroup;
 QT_END_NAMESPACE
+
+#define DEFAULT_SAMPLE_RATE		44100
+#define DEFAULT_FFT_SIZE        4096
+#define RESET_FFT_FACTOR        -72.0f
+#define REAL 0
+#define IMAG 1
 
 class MetaDataDialog;
 
@@ -35,7 +42,7 @@ public slots:
     void saveMetaData();
 
 private slots:
-    void setCamera(const QCameraDevice &cameraDevice);    
+    void setCamera(const QCameraDevice &cameraDevice);
 
     void startCamera();
     void stopCamera();
@@ -79,11 +86,19 @@ private slots:
     void setInfo(QString);
     void setUrl(QString);
     void setConnectionStatus(bool);
-    void setFrame(QImage);
+    void setVideoFrame(QImage);
+    void setAudioFrame(const char*, int);
 
     void on_pushStream_clicked();
     void on_pushExit_clicked();
     void outputDeviceChanged(int index);
+
+    void initSpectrumGraph();
+    void runFFTW(float *buffer, int fftsize);
+    void onSpectrumProcessed(int fftSize);
+
+signals:
+    void spectValueChanged(int fftSize);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -98,7 +113,7 @@ private:
     ffmpeg_rtmp* m_ffmpeg_rtmp = nullptr;
     QActionGroup *videoDevicesGroup  = nullptr;
     QMediaDevices m_devices;
-    QMediaCaptureSession m_captureSession;    
+    QMediaCaptureSession m_captureSession;
     QScopedPointer<QCamera> m_camera;
     QScopedPointer<QAudioInput> m_audioInput;
     QImageCapture *m_imageCapture;
@@ -110,7 +125,12 @@ private:
     bool m_isCapturingImage = false;
     bool m_applicationExiting = false;
     bool m_doImageCapture = true;
-    bool resizing = false;
+
+    unsigned int sampleCount = 0;
+    float   *d_realFftData;
+    float   *d_iirFftData;
+    float signalInput[DEFAULT_FFT_SIZE];
+    float d_fftAvg;
 
     MetaDataDialog *m_metaDataDialog = nullptr;
 };

@@ -23,6 +23,9 @@
 #include <QtWidgets>
 #include <QMediaDevices>
 
+static fftw_plan  planFft;
+static fftw_complex* in= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*DEFAULT_FFT_SIZE);
+static fftw_complex* out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*DEFAULT_FFT_SIZE);
 
 Camera::Camera()
     : ui(new Ui::Camera)
@@ -35,7 +38,7 @@ Camera::Camera()
     ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
     //    ui->audioOutputDeviceBox->setStyleSheet("font-size: 10pt; font-weight: bold; color: white;background-color:orange; padding: 6px; spacing: 6px;");
     connect(ui->audioOutputDeviceBox, QOverload<int>::of(&QComboBox::activated), this, &Camera::outputDeviceChanged);
-    connect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
+    QObject::connect(this, SIGNAL(spectValueChanged(int)),this, SLOT(onSpectrumProcessed(int)));
 
     ui->graphicsView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
@@ -53,7 +56,8 @@ Camera::Camera()
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendUrl,this, &Camera::setUrl);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
         connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Camera::setConnectionStatus);
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendFrame,this, &Camera::setFrame);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendVideoFrame,this, &Camera::setVideoFrame);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendAudioFrame,this, &Camera::setAudioFrame);
         m_ffmpeg_rtmp->setUrl();
     }
 
@@ -73,6 +77,7 @@ Camera::Camera()
     view = ui->graphicsView;
     view->setScene(scene);
     setCamera(QMediaDevices::defaultVideoInput());
+    initSpectrumGraph();
 }
 
 
@@ -80,17 +85,107 @@ void Camera::resizeEvent(QResizeEvent *event)
 {
     int width = event->size().width();
     int height = width * 9 / 16; // Calculate height based on 16:9 aspect ratio
-    qDebug() << width << height;
-    // Temporarily disconnect resizeEvent signal
-    disconnect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
 
-    ui->graphicsView->setFixedSize(2 * width, height);
-
-    // Reconnect resizeEvent signal
-    connect(this, &Camera::resizeEvent, this, &Camera::resizeEvent);
+//    ui->graphicsView->setFixedSize(2 * width, height);
 }
 
+void Camera::onSpectrumProcessed(int fftSize)
+{
+    ui->Plotter->setNewFttData(d_iirFftData, d_realFftData, fftSize/2);
+}
 
+void Camera::initSpectrumGraph()
+{
+    auto fftSize = DEFAULT_FFT_SIZE;
+    auto sampleRate = DEFAULT_SAMPLE_RATE;
+
+    d_realFftData = new float[fftSize];
+    d_iirFftData = new float[fftSize]();
+
+    for (int i = 0; i < fftSize; i++)
+        d_iirFftData[i] = RESET_FFT_FACTOR;  // dBFS
+
+    for (int i = 0; i < fftSize; i++)
+        d_realFftData[i] = RESET_FFT_FACTOR;
+
+    d_fftAvg = 1.0 - 1.0e-2 * ((float)75);
+
+    ui->Plotter->setTooltipsEnabled(true);
+    ui->Plotter->setSampleRate(sampleRate);
+    ui->Plotter->setSpanFreq((quint32)sampleRate);
+    ui->Plotter->setCenterFreq(sampleRate/2);
+    ui->Plotter->setFftCenterFreq(0);
+    ui->Plotter->setFftRate(sampleRate/fftSize);
+    ui->Plotter->setFftRange(-140.0f, 20.0f);
+
+    ui->Plotter->setFreqUnits(1000);
+    ui->Plotter->setPercent2DScreen(50);
+    ui->Plotter->setFreqDigits(1);
+    ui->Plotter->setFilterBoxEnabled(true);
+    ui->Plotter->setCenterLineEnabled(true);
+    ui->Plotter->setBookmarksEnabled(true);
+    ui->Plotter->setVdivDelta(40);
+    ui->Plotter->setHdivDelta(40);
+    ui->Plotter->setFftPlotColor(Qt::green);
+    ui->Plotter->setFftFill(true);
+
+}
+
+void Camera::setVideoFrame(QImage image)
+{
+    scene->clear();
+    QGraphicsPixmapItem *pixmapItem = scene->addPixmap(QPixmap::fromImage(image));
+    view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
+    view->update();
+}
+
+void Camera::setAudioFrame(const char * payloadbuf, int payloadlen)
+{
+
+    for (int i = 0; i < payloadlen; i++)
+    {
+        if(sampleCount < DEFAULT_FFT_SIZE)
+        {
+            signalInput[sampleCount] = payloadbuf[i];
+            sampleCount ++;
+        }
+        else
+        {
+            runFFTW(signalInput,DEFAULT_FFT_SIZE);
+            sampleCount = 0;
+        }
+    }
+}
+
+void Camera::runFFTW(float *buffer, int fftsize)
+{
+    if(fftsize > 0)
+    {
+        float pwr, lpwr;
+        float pwr_scale = 1.0 / ((float)fftsize * (float)fftsize);
+        int i;
+
+        planFft = fftw_plan_dft_1d(fftsize, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+        for (i=0; i < fftsize; i++)
+        {
+            in[i][0] = (float)buffer[i] / 127.5f - 1.f;
+            in[i][1] = (float)-buffer[i+1] / 127.5f - 1.f;
+        }
+
+        fftw_execute(planFft);
+
+        for (i = 0; i < fftsize; ++i)
+        {
+            pwr  = sqrt(out[i][REAL] * out[i][REAL] + out[i][IMAG] * out[i][IMAG]);
+            lpwr = 15.f * log10f(pwr_scale * pwr);
+
+            if(d_realFftData[i] < lpwr) d_realFftData[i] = lpwr; else d_realFftData[i] -= (d_realFftData[i] - lpwr) / 5.f;
+            d_iirFftData[i] += d_fftAvg * (d_realFftData[i] - d_iirFftData[i]);
+        }
+        emit spectValueChanged(fftsize);
+    }
+}
 
 void Camera::outputDeviceChanged(int index)
 {
@@ -204,6 +299,7 @@ void Camera::processCapturedImage(int requestId, const QImage& img)
     // Display captured image for 4 seconds.
     displayCapturedImage();
     QTimer::singleShot(4000, this, &Camera::displayViewfinder);
+
 }
 
 void Camera::configureCaptureSettings()
@@ -456,14 +552,6 @@ void Camera::setConnectionStatus(bool status)
         ui->pushStream->setText("Start");
         setInfo("Rtmp stream stopped.");
     }
-}
-
-void Camera::setFrame(QImage image)
-{
-    scene->clear();
-    QGraphicsPixmapItem *pixmapItem = scene->addPixmap(QPixmap::fromImage(image));
-    view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
-    view->update();
 }
 
 void Camera::on_pushExit_clicked()
