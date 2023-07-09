@@ -38,7 +38,9 @@ win32 {
   DEFINES += WIN32_LEAN_AND_MEAN
   RC_ICONS += $$PWD\images\app.ico
   INCLUDEPATH += $$PWD\lib\ffmpeg
+  INCLUDEPATH += $$PWD\lib\fftw
   LIBS += -L$$PWD\lib\libav -llibavformat -llibavcodec -llibavutil -llibavfilter -llibswscale -lswresample
+  LIBS += -L$$PWD\lib\fftw -llibfftw3-3 -llibfftw3f-3 -llibfftw3l-3
 }
 
 unix:!macx {

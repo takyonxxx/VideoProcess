@@ -28,11 +28,11 @@
  * or implied, of Moe Wheatley.
  */
 #include <cmath>
-
 #ifndef _MSC_VER
 #include <sys/time.h>
 #else
 #include <Windows.h>
+#include <winsock.h>
 #include <cstdint>
 
 int gettimeofday(struct timeval * tp, struct timezone * tzp)
