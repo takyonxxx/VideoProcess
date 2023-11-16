@@ -53,9 +53,9 @@ unix:!macx {
 
 unix:macx {
     message("macx enabled")
-    INCLUDEPATH += /opt/homebrew/Cellar/ffmpeg/6.0/include
+    INCLUDEPATH += /opt/homebrew/Cellar/ffmpeg/6.0_1/include
     INCLUDEPATH += /opt/homebrew/Cellar/fftw/3.3.10_1/include
-    LIBS += -L/opt/homebrew/Cellar/ffmpeg/6.0/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
+    LIBS += -L/opt/homebrew/Cellar/ffmpeg/6.0_1/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
     LIBS += -L/opt/homebrew/Cellar/fftw/3.3.10_1/lib -lfftw3
 }
 
