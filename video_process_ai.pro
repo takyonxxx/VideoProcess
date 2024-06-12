@@ -5,9 +5,9 @@ QT += multimedia multimediawidgets widgets network
 
 HEADERS = \
     Plotter.h \
-    camera.h \
     ffmpeg_rtmp.h \
     imagesettings.h \
+    rtmp.h \
     videosettings.h \
     metadatadialog.h
 
@@ -15,8 +15,8 @@ SOURCES = \
     Plotter.cpp \
     main.cpp \
     ffmpeg_rtmp.cpp \
-    camera.cpp \
     imagesettings.cpp \
+    rtmp.cpp \
     videosettings.cpp \
     metadatadialog.cpp
 
@@ -29,7 +29,7 @@ android|ios {
         videosettings_mobile.ui
 } else {
     FORMS += \
-        camera.ui \
+    rtmp.ui \
         videosettings.ui
 }
 
@@ -53,10 +53,12 @@ unix:!macx {
 
 unix:macx {
     message("macx enabled")
-    INCLUDEPATH += /opt/homebrew/Cellar/ffmpeg/6.0_1/include
-    INCLUDEPATH += /opt/homebrew/Cellar/fftw/3.3.10_1/include
-    LIBS += -L/opt/homebrew/Cellar/ffmpeg/6.0_1/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
-    LIBS += -L/opt/homebrew/Cellar/fftw/3.3.10_1/lib -lfftw3
+    # HOMEBREW_CELLAR_PATH = /opt/homebrew/Cellar
+    HOMEBREW_CELLAR_PATH = /usr/local/Cellar
+    INCLUDEPATH += $$HOMEBREW_CELLAR_PATH/ffmpeg/7.0.1/include
+    INCLUDEPATH += $$HOMEBREW_CELLAR_PATH/fftw/3.3.10_1/include
+    LIBS += -L$$HOMEBREW_CELLAR_PATH/ffmpeg/7.0.1/lib -lavformat -lavcodec -lavutil -lavfilter -lswscale -lswresample
+    LIBS += -L$$HOMEBREW_CELLAR_PATH/fftw/3.3.10_1/lib -lfftw3
 }
 
 RESOURCES += camera.qrc

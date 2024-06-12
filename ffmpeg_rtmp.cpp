@@ -407,7 +407,7 @@ void ffmpeg_rtmp::start_streamer()
                         {
                             // Calculate the total number of samples in the frame
                             int numSamples = audio_frame->nb_samples;
-                            int channels = audioCodecContext->channels;
+                            int channels = audioCodecContext->ch_layout.nb_channels;
 
                             // Allocate memory for the PCM 16-bit frame
                             int16_t* pcm16Frame = new int16_t[numSamples * channels];

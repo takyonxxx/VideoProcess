@@ -1,5 +1,5 @@
-#ifndef CAMERA_H
-#define CAMERA_H
+#ifndef RTMP_H
+#define RTMP_H
 
 #include <QCamera>
 #include <QImageCapture>
@@ -31,12 +31,12 @@ QT_END_NAMESPACE
 
 class MetaDataDialog;
 
-class Camera : public QMainWindow
+class Rtmp : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    Camera();
+    Rtmp();
 
 public slots:
     void saveMetaData();

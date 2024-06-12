@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "rtmp.h"
 
 #include <QtWidgets>
 
@@ -6,8 +6,8 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    Camera camera;
-    camera.show();
+    Rtmp rtmp;
+    rtmp.show();
 
     return app.exec();
 };

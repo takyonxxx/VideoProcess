@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "rtmp.h"
 #if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
 #include "ui_camera_mobile.h"
 #else
@@ -27,7 +27,7 @@ static fftw_plan  planFft;
 static fftw_complex* in= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*DEFAULT_FFT_SIZE);
 static fftw_complex* out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*DEFAULT_FFT_SIZE);
 
-Camera::Camera()
+Rtmp::Rtmp()
     : ui(new Ui::Camera)
 {
     ui->setupUi(this);
@@ -37,7 +37,7 @@ Camera::Camera()
     ui->labelRtmpUrl->setStyleSheet("font-size: 14pt; font-weight: bold; color: #ECF0F1;background-color: #2E4053;   padding: 6px; spacing: 6px;");
     ui->textTerminal->setStyleSheet("font: 10pt; color: #00cccc; background-color: #001a1a;");
     //    ui->audioOutputDeviceBox->setStyleSheet("font-size: 10pt; font-weight: bold; color: white;background-color:orange; padding: 6px; spacing: 6px;");
-    connect(ui->audioOutputDeviceBox, QOverload<int>::of(&QComboBox::activated), this, &Camera::outputDeviceChanged);
+    connect(ui->audioOutputDeviceBox, QOverload<int>::of(&QComboBox::activated), this, &Rtmp::outputDeviceChanged);
     QObject::connect(this, SIGNAL(spectValueChanged(int)),this, SLOT(onSpectrumProcessed(int)));
 
     ui->graphicsView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -53,11 +53,11 @@ Camera::Camera()
     m_ffmpeg_rtmp = new ffmpeg_rtmp();
     if(m_ffmpeg_rtmp)
     {
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendUrl,this, &Camera::setUrl);
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Camera::setInfo);
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Camera::setConnectionStatus);
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendVideoFrame,this, &Camera::setVideoFrame);
-        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendAudioFrame,this, &Camera::setAudioFrame);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendUrl,this, &Rtmp::setUrl);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendInfo,this, &Rtmp::setInfo);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendConnectionStatus,this, &Rtmp::setConnectionStatus);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendVideoFrame,this, &Rtmp::setVideoFrame);
+        connect(m_ffmpeg_rtmp,&ffmpeg_rtmp::sendAudioFrame,this, &Rtmp::setAudioFrame);
         m_ffmpeg_rtmp->setUrl();
     }
 
@@ -66,10 +66,10 @@ Camera::Camera()
     videoDevicesGroup = new QActionGroup(this);
     videoDevicesGroup->setExclusive(true);
     updateCameras();
-    connect(&m_devices, &QMediaDevices::videoInputsChanged, this, &Camera::updateCameras);
+    connect(&m_devices, &QMediaDevices::videoInputsChanged, this, &Rtmp::updateCameras);
 
-    connect(videoDevicesGroup, &QActionGroup::triggered, this, &Camera::updateCameraDevice);
-    connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
+    connect(videoDevicesGroup, &QActionGroup::triggered, this, &Rtmp::updateCameraDevice);
+    connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Rtmp::updateCaptureMode);
 
     scene = new QGraphicsScene;
     QBrush brush(Qt::black); // Set the desired background color
@@ -81,7 +81,7 @@ Camera::Camera()
 }
 
 
-void Camera::resizeEvent(QResizeEvent *event)
+void Rtmp::resizeEvent(QResizeEvent *event)
 {
     int width = event->size().width();
     int height = width * 9 / 16; // Calculate height based on 16:9 aspect ratio
@@ -89,12 +89,12 @@ void Camera::resizeEvent(QResizeEvent *event)
 //    ui->graphicsView->setFixedSize(2 * width, height);
 }
 
-void Camera::onSpectrumProcessed(int fftSize)
+void Rtmp::onSpectrumProcessed(int fftSize)
 {
     ui->Plotter->setNewFttData(d_iirFftData, d_realFftData, fftSize/2);
 }
 
-void Camera::initSpectrumGraph()
+void Rtmp::initSpectrumGraph()
 {
     auto fftSize = DEFAULT_FFT_SIZE;
     auto sampleRate = DEFAULT_SAMPLE_RATE;
@@ -131,7 +131,7 @@ void Camera::initSpectrumGraph()
 
 }
 
-void Camera::setVideoFrame(QImage image)
+void Rtmp::setVideoFrame(QImage image)
 {
     scene->clear();
     QGraphicsPixmapItem *pixmapItem = scene->addPixmap(QPixmap::fromImage(image));
@@ -139,7 +139,7 @@ void Camera::setVideoFrame(QImage image)
     view->update();
 }
 
-void Camera::setAudioFrame(const char * payloadbuf, int payloadlen)
+void Rtmp::setAudioFrame(const char * payloadbuf, int payloadlen)
 {
 
     for (int i = 0; i < payloadlen; i++)
@@ -157,7 +157,7 @@ void Camera::setAudioFrame(const char * payloadbuf, int payloadlen)
     }
 }
 
-void Camera::runFFTW(float *buffer, int fftsize)
+void Rtmp::runFFTW(float *buffer, int fftsize)
 {
     if(fftsize > 0)
     {
@@ -189,42 +189,42 @@ void Camera::runFFTW(float *buffer, int fftsize)
     }
 }
 
-void Camera::outputDeviceChanged(int index)
+void Rtmp::outputDeviceChanged(int index)
 {
     QAudioDevice ouputDevice = ui->audioOutputDeviceBox->itemData(index).value<QAudioDevice>();
     m_ffmpeg_rtmp->set_audio_device(ouputDevice);
 }
 
 
-void Camera::setCamera(const QCameraDevice &cameraDevice)
+void Rtmp::setCamera(const QCameraDevice &cameraDevice)
 {
     m_camera.reset(new QCamera(cameraDevice));
     m_captureSession.setCamera(m_camera.data());
 
-    connect(m_camera.data(), &QCamera::activeChanged, this, &Camera::updateCameraActive);
-    connect(m_camera.data(), &QCamera::errorOccurred, this, &Camera::displayCameraError);
+    connect(m_camera.data(), &QCamera::activeChanged, this, &Rtmp::updateCameraActive);
+    connect(m_camera.data(), &QCamera::errorOccurred, this, &Rtmp::displayCameraError);
 
     if (!m_mediaRecorder) {
         m_mediaRecorder.reset(new QMediaRecorder);
         m_captureSession.setRecorder(m_mediaRecorder.data());
-        connect(m_mediaRecorder.data(), &QMediaRecorder::recorderStateChanged, this, &Camera::updateRecorderState);
+        connect(m_mediaRecorder.data(), &QMediaRecorder::recorderStateChanged, this, &Rtmp::updateRecorderState);
     }
 
     m_imageCapture = new QImageCapture;
     m_captureSession.setImageCapture(m_imageCapture);
 
-    connect(m_mediaRecorder.data(), &QMediaRecorder::durationChanged, this, &Camera::updateRecordTime);
-    connect(m_mediaRecorder.data(), &QMediaRecorder::errorChanged, this, &Camera::displayRecorderError);
+    connect(m_mediaRecorder.data(), &QMediaRecorder::durationChanged, this, &Rtmp::updateRecordTime);
+    connect(m_mediaRecorder.data(), &QMediaRecorder::errorChanged, this, &Rtmp::displayRecorderError);
 
     m_captureSession.setVideoOutput(ui->viewfinder);
 
     updateCameraActive(m_camera->isActive());
     updateRecorderState(m_mediaRecorder->recorderState());
 
-    connect(m_imageCapture, &QImageCapture::readyForCaptureChanged, this, &Camera::readyForCapture);
-    connect(m_imageCapture, &QImageCapture::imageCaptured, this, &Camera::processCapturedImage);
-    connect(m_imageCapture, &QImageCapture::imageSaved, this, &Camera::imageSaved);
-    connect(m_imageCapture, &QImageCapture::errorOccurred, this, &Camera::displayCaptureError);
+    connect(m_imageCapture, &QImageCapture::readyForCaptureChanged, this, &Rtmp::readyForCapture);
+    connect(m_imageCapture, &QImageCapture::imageCaptured, this, &Rtmp::processCapturedImage);
+    connect(m_imageCapture, &QImageCapture::imageSaved, this, &Rtmp::imageSaved);
+    connect(m_imageCapture, &QImageCapture::errorOccurred, this, &Rtmp::displayCaptureError);
     readyForCapture(m_imageCapture->isReadyForCapture());
 
     updateCaptureMode();
@@ -252,7 +252,7 @@ void Camera::setCamera(const QCameraDevice &cameraDevice)
     m_camera->start();
 }
 
-void Camera::keyPressEvent(QKeyEvent * event)
+void Rtmp::keyPressEvent(QKeyEvent * event)
 {
     if (event->isAutoRepeat())
         return;
@@ -278,18 +278,18 @@ void Camera::keyPressEvent(QKeyEvent * event)
     }
 }
 
-void Camera::keyReleaseEvent(QKeyEvent *event)
+void Rtmp::keyReleaseEvent(QKeyEvent *event)
 {
     QMainWindow::keyReleaseEvent(event);
 }
 
-void Camera::updateRecordTime()
+void Rtmp::updateRecordTime()
 {
     QString str = QString("Recorded %1 sec").arg(m_mediaRecorder->duration()/1000);
     //    ui->statusbar->showMessage(str);
 }
 
-void Camera::processCapturedImage(int requestId, const QImage& img)
+void Rtmp::processCapturedImage(int requestId, const QImage& img)
 {
     Q_UNUSED(requestId);
     QImage scaledImage = img.scaled(ui->viewfinder->size(),
@@ -300,11 +300,11 @@ void Camera::processCapturedImage(int requestId, const QImage& img)
 
     // Display captured image for 4 seconds.
     displayCapturedImage();
-    QTimer::singleShot(4000, this, &Camera::displayViewfinder);
+    QTimer::singleShot(4000, this, &Rtmp::displayViewfinder);
 
 }
 
-void Camera::configureCaptureSettings()
+void Rtmp::configureCaptureSettings()
 {
     if (m_doImageCapture)
         configureImageSettings();
@@ -312,7 +312,7 @@ void Camera::configureCaptureSettings()
         configureVideoSettings();
 }
 
-void Camera::configureVideoSettings()
+void Rtmp::configureVideoSettings()
 {
     VideoSettings settingsDialog(m_mediaRecorder.data());
     settingsDialog.setWindowFlags(settingsDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -321,7 +321,7 @@ void Camera::configureVideoSettings()
         settingsDialog.applySettings();
 }
 
-void Camera::configureImageSettings()
+void Rtmp::configureImageSettings()
 {
     ImageSettings settingsDialog(m_imageCapture);
     settingsDialog.setWindowFlags(settingsDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -331,34 +331,34 @@ void Camera::configureImageSettings()
     }
 }
 
-void Camera::record()
+void Rtmp::record()
 {
     m_mediaRecorder->record();
     updateRecordTime();
 }
 
-void Camera::pause()
+void Rtmp::pause()
 {
     m_mediaRecorder->pause();
 }
 
-void Camera::stop()
+void Rtmp::stop()
 {
     m_mediaRecorder->stop();
 }
 
-void Camera::setMuted(bool muted)
+void Rtmp::setMuted(bool muted)
 {
     m_captureSession.audioInput()->setMuted(muted);
 }
 
-void Camera::takeImage()
+void Rtmp::takeImage()
 {
     m_isCapturingImage = true;
     m_imageCapture->captureToFile();
 }
 
-void Camera::displayCaptureError(int id, const QImageCapture::Error error, const QString &errorString)
+void Rtmp::displayCaptureError(int id, const QImageCapture::Error error, const QString &errorString)
 {
     Q_UNUSED(id);
     Q_UNUSED(error);
@@ -366,23 +366,23 @@ void Camera::displayCaptureError(int id, const QImageCapture::Error error, const
     m_isCapturingImage = false;
 }
 
-void Camera::startCamera()
+void Rtmp::startCamera()
 {
     m_camera->start();
 }
 
-void Camera::stopCamera()
+void Rtmp::stopCamera()
 {
     m_camera->stop();
 }
 
-void Camera::updateCaptureMode()
+void Rtmp::updateCaptureMode()
 {
     int tabIndex = ui->captureWidget->currentIndex();
     m_doImageCapture = (tabIndex == 0);
 }
 
-void Camera::updateCameraActive(bool active)
+void Rtmp::updateCameraActive(bool active)
 {
     //    if (active) {
     //        ui->actionStartCamera->setEnabled(false);
@@ -397,7 +397,7 @@ void Camera::updateCameraActive(bool active)
     //    }
 }
 
-void Camera::updateRecorderState(QMediaRecorder::RecorderState state)
+void Rtmp::updateRecorderState(QMediaRecorder::RecorderState state)
 {
     switch (state) {
     case QMediaRecorder::StoppedState:
@@ -409,44 +409,44 @@ void Camera::updateRecorderState(QMediaRecorder::RecorderState state)
     }
 }
 
-void Camera::setExposureCompensation(int index)
+void Rtmp::setExposureCompensation(int index)
 {
     m_camera->setExposureCompensation(index*0.5);
 }
 
-void Camera::displayRecorderError()
+void Rtmp::displayRecorderError()
 {
     if (m_mediaRecorder->error() != QMediaRecorder::NoError)
         QMessageBox::warning(this, tr("Capture Error"), m_mediaRecorder->errorString());
 }
 
-void Camera::displayCameraError()
+void Rtmp::displayCameraError()
 {
     if (m_camera->error() != QCamera::NoError)
         QMessageBox::warning(this, tr("Camera Error"), m_camera->errorString());
 }
 
-void Camera::updateCameraDevice(QAction *action)
+void Rtmp::updateCameraDevice(QAction *action)
 {
     setCamera(qvariant_cast<QCameraDevice>(action->data()));
 }
 
-void Camera::displayViewfinder()
+void Rtmp::displayViewfinder()
 {
     ui->stackedWidget->setCurrentIndex(0);
 }
 
-void Camera::displayCapturedImage()
+void Rtmp::displayCapturedImage()
 {
     ui->stackedWidget->setCurrentIndex(1);
 }
 
-void Camera::readyForCapture(bool ready)
+void Rtmp::readyForCapture(bool ready)
 {
 
 }
 
-void Camera::imageSaved(int id, const QString &fileName)
+void Rtmp::imageSaved(int id, const QString &fileName)
 {
     Q_UNUSED(id);
     //    ui->statusbar->showMessage(tr("Captured \"%1\"").arg(QDir::toNativeSeparators(fileName)));
@@ -456,7 +456,7 @@ void Camera::imageSaved(int id, const QString &fileName)
         close();
 }
 
-void Camera::closeEvent(QCloseEvent *event)
+void Rtmp::closeEvent(QCloseEvent *event)
 {
     if (m_isCapturingImage) {
         setEnabled(false);
@@ -467,7 +467,7 @@ void Camera::closeEvent(QCloseEvent *event)
     }
 }
 
-void Camera::updateCameras()
+void Rtmp::updateCameras()
 {
     ui->menuDevices->clear();
     const QList<QCameraDevice> availableCameras = QMediaDevices::videoInputs();
@@ -482,7 +482,7 @@ void Camera::updateCameras()
     }
 }
 
-void Camera::showMetaDataDialog()
+void Rtmp::showMetaDataDialog()
 {
     if (!m_metaDataDialog)
         m_metaDataDialog = new MetaDataDialog(this);
@@ -491,7 +491,7 @@ void Camera::showMetaDataDialog()
         saveMetaData();
 }
 
-void Camera::saveMetaData()
+void Rtmp::saveMetaData()
 {
     QMediaMetaData data;
     for (int i = 0; i < QMediaMetaData::NumMetaData; i++) {
@@ -518,7 +518,7 @@ void Camera::saveMetaData()
     m_mediaRecorder->setMetaData(data);
 }
 
-void Camera::on_pushStream_clicked()
+void Rtmp::on_pushStream_clicked()
 {
     if(ui->pushStream->text() == "Start")
     {
@@ -532,17 +532,17 @@ void Camera::on_pushStream_clicked()
     }
 }
 
-void Camera::setInfo(QString message)
+void Rtmp::setInfo(QString message)
 {
     ui->textTerminal->append(message);
 }
 
-void Camera::setUrl(QString url)
+void Rtmp::setUrl(QString url)
 {
     ui->labelRtmpUrl->setText(url);
 }
 
-void Camera::setConnectionStatus(bool status)
+void Rtmp::setConnectionStatus(bool status)
 {
     if(status)
     {
@@ -556,7 +556,7 @@ void Camera::setConnectionStatus(bool status)
     }
 }
 
-void Camera::on_pushExit_clicked()
+void Rtmp::on_pushExit_clicked()
 {
     QApplication::quit();
 }

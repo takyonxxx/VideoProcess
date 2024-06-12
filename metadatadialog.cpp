@@ -1,5 +1,5 @@
 #include "metadatadialog.h"
-#include "camera.h"
+#include "rtmp.h"
 
 #include <QtWidgets>
 #include <QFormLayout>
